@@ -318,6 +318,12 @@ function LeafVE:AwardBadge(playerName, badgeId)
   LeafVE_DB.badges[playerName][badgeId] = time()
   Print("Badge awarded to "..playerName..": "..badgeId)
   
+  -- **NEW: Broadcast badges immediately after awarding**
+  local me = ShortName(UnitName("player"))
+  if me and playerName == me then
+    self:BroadcastBadges()
+  end
+  
   -- Refresh UI if player card is showing this player
   if LeafVE.UI.cardCurrentPlayer == playerName then
     LeafVE.UI:UpdateCardRecentBadges(playerName)
@@ -686,8 +692,81 @@ function LeafVE:BroadcastMyAchievements()
   -- Placeholder for achievement system
 end
 
+function LeafVE:BroadcastBadges()
+  if not InGuild() then return end
+  
+  local me = ShortName(UnitName("player"))
+  if not me then return end
+  
+  EnsureDB()
+  local myBadges = LeafVE_DB.badges[me] or {}
+  
+  -- Build compressed badge list: "badgeID:timestamp,badgeID:timestamp,..."
+  local badgeData = {}
+  for badgeId, timestamp in pairs(myBadges) do
+    table.insert(badgeData, badgeId..":"..timestamp)
+  end
+  
+  if table.getn(badgeData) > 0 then
+    local message = table.concat(badgeData, ",")
+    SendAddonMessage("LeafVE", "BADGES:"..message, "GUILD")
+    Print("Broadcast "..table.getn(badgeData).." badges to guild")
+  end
+end
+
 function LeafVE:OnAddonMessage(prefix, message, channel, sender)
-  -- Placeholder for addon communication
+  if prefix ~= "LeafVE" then return end
+  if channel ~= "GUILD" then return end
+  
+  sender = ShortName(sender)
+  if not sender then return end
+  
+  -- Parse badge sync message
+  if string.sub(message, 1, 7) == "BADGES:" then
+    local badgeData = string.sub(message, 8)
+    
+    EnsureDB()
+    if not LeafVE_DB.badges[sender] then
+      LeafVE_DB.badges[sender] = {}
+    end
+    
+    -- Parse badge data (Vanilla WoW compatible)
+    local badges = {}
+    local startPos = 1
+    
+    while startPos <= string.len(badgeData) do
+      local commaPos = string.find(badgeData, ",", startPos)
+      local badgeEntry
+      
+      if commaPos then
+        badgeEntry = string.sub(badgeData, startPos, commaPos - 1)
+        startPos = commaPos + 1
+      else
+        badgeEntry = string.sub(badgeData, startPos)
+        startPos = string.len(badgeData) + 1
+      end
+      
+      -- Parse individual badge: "badgeID:timestamp"
+      local colonPos = string.find(badgeEntry, ":")
+      if colonPos then
+        local badgeId = string.sub(badgeEntry, 1, colonPos - 1)
+        local timestamp = string.sub(badgeEntry, colonPos + 1)
+        badges[badgeId] = tonumber(timestamp)
+      end
+    end
+    
+    -- Update stored data for this player
+    LeafVE_DB.badges[sender] = badges
+    
+    local count = 0
+    for _ in pairs(badges) do count = count + 1 end
+    Print("Received "..count.." badges from "..sender)
+    
+    -- Refresh UI if viewing this player
+    if LeafVE.UI and LeafVE.UI.cardCurrentPlayer == sender then
+      LeafVE.UI:UpdateCardRecentBadges(sender)
+    end
+  end
 end
 
 function FindUnitToken(playerName)
@@ -2977,9 +3056,19 @@ ef:SetScript("OnEvent", function()
     Print("Loaded v"..LeafVE.version)
     Print("Auto-tracking: Login & Group points enabled!")
     LeafVE:CheckDailyLogin()
-    if InGuild() then
-      LeafVE:BroadcastMyAchievements()
-    end
+    
+    -- Broadcast after 5 seconds
+    local broadcastTimer = 0
+    local broadcastFrame = CreateFrame("Frame")
+    broadcastFrame:SetScript("OnUpdate", function()
+      broadcastTimer = broadcastTimer + arg1
+      if broadcastTimer >= 5 then
+        if InGuild() then
+          LeafVE:BroadcastBadges()
+        end
+        broadcastFrame:SetScript("OnUpdate", nil)
+      end
+    end)
     return
   end
   
@@ -3016,9 +3105,48 @@ updateFrame:SetScript("OnUpdate", function()
   end
 end)
 
+local badgeSyncTimer = 0
+
+local updateFrame = CreateFrame("Frame")
+updateFrame:SetScript("OnUpdate", function()
+  groupCheckTimer = groupCheckTimer + arg1
+  notificationTimer = notificationTimer + arg1
+  attendanceTimer = attendanceTimer + arg1
+  badgeSyncTimer = badgeSyncTimer + arg1
+  
+  if groupCheckTimer >= 30 then
+    groupCheckTimer = 0
+    LeafVE:OnGroupUpdate()
+  end
+  
+  if notificationTimer >= 0.1 then
+    notificationTimer = 0
+    LeafVE:ProcessNotifications()
+  end
+  
+  if attendanceTimer >= 300 then
+    attendanceTimer = 0
+    LeafVE:TrackAttendance()
+  end
+  
+  -- Sync badges every 5 minutes
+  if badgeSyncTimer >= 300 then
+    badgeSyncTimer = 0
+    if InGuild() then
+      LeafVE:BroadcastBadges()
+    end
+  end
+end)
+
 -------------------------------------------------
 -- SLASH COMMANDS
 -------------------------------------------------
+
+SLASH_BADGESYNC1 = "/badgesync"
+SlashCmdList["BADGESYNC"] = function()
+  LeafVE:BroadcastBadges()
+  Print("Broadcasting badges to guild...")
+end
 
 SLASH_LEAFVE1 = "/lve"
 SlashCmdList["LEAFVE"] = function(msg)
