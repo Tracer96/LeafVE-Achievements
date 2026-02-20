@@ -542,6 +542,146 @@ LeafVE_AchTest.API = {
 
 Print("Achievement API loaded!")
 
+Print("Achievement API loaded!")
+
+-- ==========================================
+-- GUILD SYNC SYSTEM
+-- ==========================================
+
+-- Broadcast your achievements to guild
+function LeafVE_AchTest:BroadcastAchievements()
+  if not IsInGuild() then return end
+  
+  local me = ShortName(UnitName("player"))
+  if not me then return end
+  
+  local myAchievements = self:GetPlayerAchievements(me)
+  
+  -- Build compressed achievement list (just IDs and timestamps)
+  local achData = {}
+  for achID, data in pairs(myAchievements) do
+    table.insert(achData, achID..":"..data.timestamp..":"..data.points)
+  end
+  
+  local message = table.concat(achData, ",")
+  
+  -- Send via addon channel
+  if table.getn(achData) > 0 then
+    SendAddonMessage("LeafVEAch", "SYNC:"..message, "GUILD")
+    Debug("Broadcast "..table.getn(achData).." achievements to guild")
+  else
+    Debug("No achievements to broadcast")
+  end
+end
+
+-- Receive other players' achievements (FIXED for Vanilla WoW)
+function LeafVE_AchTest:OnAddonMessage(prefix, message, channel, sender)
+  if prefix ~= "LeafVEAch" then return end
+  if channel ~= "GUILD" then return end
+  
+  sender = ShortName(sender)
+  if not sender then return end
+  
+  Debug("Received addon message from "..sender)
+  
+  -- Parse sync message
+  if string.sub(message, 1, 5) == "SYNC:" then
+    local achData = string.sub(message, 6)
+    
+    if not LeafVE_AchTest_DB.achievements[sender] then
+      LeafVE_AchTest_DB.achievements[sender] = {}
+    end
+    
+    -- Parse achievement data (Vanilla WoW compatible)
+    local achievements = {}
+    local startPos = 1
+    
+    while startPos <= string.len(achData) do
+      local commaPos = string.find(achData, ",", startPos)
+      local achEntry
+      
+      if commaPos then
+        achEntry = string.sub(achData, startPos, commaPos - 1)
+        startPos = commaPos + 1
+      else
+        achEntry = string.sub(achData, startPos)
+        startPos = string.len(achData) + 1
+      end
+      
+      -- Parse individual achievement: "achID:timestamp:points"
+      local colonPos1 = string.find(achEntry, ":")
+      if colonPos1 then
+        local achID = string.sub(achEntry, 1, colonPos1 - 1)
+        local colonPos2 = string.find(achEntry, ":", colonPos1 + 1)
+        
+        if colonPos2 then
+          local timestamp = string.sub(achEntry, colonPos1 + 1, colonPos2 - 1)
+          local points = string.sub(achEntry, colonPos2 + 1)
+          
+          achievements[achID] = {
+            timestamp = tonumber(timestamp),
+            points = tonumber(points)
+          }
+        end
+      end
+    end
+    
+    -- Update stored data for this player
+    LeafVE_AchTest_DB.achievements[sender] = achievements
+    
+    local count = 0
+    for _ in pairs(achievements) do count = count + 1 end
+    Debug("Stored "..count.." achievements from "..sender)
+    
+    -- Refresh UI if viewing this player
+    if LeafVE and LeafVE.UI and LeafVE.UI.cardCurrentPlayer == sender then
+      LeafVE.UI:ShowPlayerCard(sender)
+    end
+  end
+end
+
+-- Register addon message listener
+local syncFrame = CreateFrame("Frame")
+syncFrame:RegisterEvent("CHAT_MSG_ADDON")
+syncFrame:SetScript("OnEvent", function()
+  if event == "CHAT_MSG_ADDON" then
+    LeafVE_AchTest:OnAddonMessage(arg1, arg2, arg3, arg4)
+  end
+end)
+
+-- Auto-broadcast on login and every 5 minutes
+local broadcastTimer = 0
+local broadcastFrame = CreateFrame("Frame")
+broadcastFrame:SetScript("OnUpdate", function()
+  broadcastTimer = broadcastTimer + arg1
+  if broadcastTimer >= 300 then -- 5 minutes
+    broadcastTimer = 0
+    LeafVE_AchTest:BroadcastAchievements()
+  end
+end)
+
+-- Broadcast shortly after login
+local loginBroadcast = CreateFrame("Frame")
+loginBroadcast:RegisterEvent("PLAYER_ENTERING_WORLD")
+loginBroadcast:SetScript("OnEvent", function()
+  if event == "PLAYER_ENTERING_WORLD" then
+    local waitTimer = 0
+    this:SetScript("OnUpdate", function()
+      waitTimer = waitTimer + arg1
+      if waitTimer >= 5 then
+        LeafVE_AchTest:BroadcastAchievements()
+        this:SetScript("OnUpdate", nil)
+        this:UnregisterEvent("PLAYER_ENTERING_WORLD")
+      end
+    end)
+  end
+end)
+
+Print("Achievement sync system loaded!")
+
+-- Store original SendChatMessage before hooking
+local originalSendChatMessage = SendChatMessage
+
 -- Store original SendChatMessage before hooking
 local originalSendChatMessage = SendChatMessage
 
@@ -1594,6 +1734,12 @@ SLASH_ACHTESTDEBUG1 = "/achtestdebug"
 SlashCmdList["ACHTESTDEBUG"] = function(msg)
   LeafVE_AchTest.DEBUG = not LeafVE_AchTest.DEBUG
   Print("Debug mode: "..tostring(LeafVE_AchTest.DEBUG))
+end
+
+SLASH_ACHSYNC1 = "/achsync"
+SlashCmdList["ACHSYNC"] = function()
+  LeafVE_AchTest:BroadcastAchievements()
+  Print("Broadcasting achievements to guild...")
 end
 
 -- Chat Title Integration with Orange Color (Vanilla WoW Compatible)
