@@ -1579,7 +1579,7 @@ local ef = CreateFrame("Frame")
 ef:RegisterEvent("ADDON_LOADED")
 ef:RegisterEvent("PLAYER_LEVEL_UP")
 ef:RegisterEvent("PLAYER_MONEY")
-ef:RegisterEvent("CHAT_MSG_COMBAT_HOSTILE_DEATH")  -- ADD THIS LINE
+ef:RegisterEvent("CHAT_MSG_COMBAT_HOSTILE_DEATH")
 
 ef:SetScript("OnEvent", function()
   if event == "ADDON_LOADED" and arg1 == LeafVE_AchTest.name then
