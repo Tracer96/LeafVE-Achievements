@@ -1232,8 +1232,9 @@ function LeafVE.UI:ShowPlayerCard(playerName)
       Print("DEBUG: LeafVE_AchTest.API exists")
       if LeafVE_AchTest.API.GetPlayerPoints then
         Print("DEBUG: GetPlayerPoints function exists")
+        -- FIX: Pass playerName instead of assuming it's the local player
         achPoints = LeafVE_AchTest.API.GetPlayerPoints(playerName)
-        Print("DEBUG: Got "..tostring(achPoints).." points")
+        Print("DEBUG: Got "..tostring(achPoints).." points for "..playerName)
       else
         Print("DEBUG: GetPlayerPoints NOT FOUND")
       end
@@ -1252,6 +1253,7 @@ function LeafVE.UI:ShowPlayerCard(playerName)
   local recentAch = {}
   if LeafVE_AchTest and LeafVE_AchTest.API and LeafVE_AchTest.API.GetRecentAchievements then
     Print("DEBUG: Calling GetRecentAchievements for "..tostring(playerName))
+    -- FIX: Pass playerName instead of assuming local player
     recentAch = LeafVE_AchTest.API.GetRecentAchievements(playerName, 5)
     Print("DEBUG: API returned "..tostring(table.getn(recentAch)).." achievements")
     
