@@ -637,6 +637,106 @@ function LeafVE_AchTest:ShowAchievementPopup(achievementID)
   PlaySound("LevelUp")
 end
 
+-- Broadcast your achievements to guild
+function LeafVE_AchTest:BroadcastAchievements()
+  if not IsInGuild() then return end
+  
+  local me = ShortName(UnitName("player"))
+  if not me then return end
+  
+  local myAchievements = self:GetPlayerAchievements(me)
+  
+  -- Build compressed achievement list (just IDs and timestamps)
+  local achData = {}
+  for achID, data in pairs(myAchievements) do
+    table.insert(achData, achID..":"..data.timestamp..":"..data.points)
+  end
+  
+  local message = table.concat(achData, ",")
+  
+  -- Send via addon channel
+  SendAddonMessage("LeafVEAch", "SYNC:"..message, "GUILD")
+  Debug("Broadcast "..table.getn(achData).." achievements to guild")
+end
+
+-- Receive other players' achievements
+function LeafVE_AchTest:OnAddonMessage(prefix, message, channel, sender)
+  if prefix ~= "LeafVEAch" then return end
+  if channel ~= "GUILD" then return end
+  
+  sender = ShortName(sender)
+  if not sender then return end
+  
+  -- Parse sync message
+  if string.sub(message, 1, 5) == "SYNC:" then
+    local achData = string.sub(message, 6)
+    
+    if not LeafVE_AchTest_DB.achievements[sender] then
+      LeafVE_AchTest_DB.achievements[sender] = {}
+    end
+    
+    -- Parse achievement data
+    local achievements = {}
+    for achEntry in string.gfind(achData, "[^,]+") do
+      local achID, timestamp, points = string.match(achEntry, "([^:]+):([^:]+):([^:]+)")
+      if achID and timestamp and points then
+        achievements[achID] = {
+          timestamp = tonumber(timestamp),
+          points = tonumber(points)
+        }
+      end
+    end
+    
+    -- Update stored data for this player
+    LeafVE_AchTest_DB.achievements[sender] = achievements
+    Debug("Received "..table.getn(achievements).." achievements from "..sender)
+    
+    -- Refresh UI if viewing this player
+    if LeafVE and LeafVE.UI and LeafVE.UI.cardCurrentPlayer == sender then
+      LeafVE.UI:ShowPlayerCard(sender)
+    end
+  end
+end
+
+-- Hook into existing event frame
+local syncFrame = CreateFrame("Frame")
+syncFrame:RegisterEvent("CHAT_MSG_ADDON")
+syncFrame:SetScript("OnEvent", function()
+  if event == "CHAT_MSG_ADDON" then
+    LeafVE_AchTest:OnAddonMessage(arg1, arg2, arg3, arg4)
+  end
+end)
+
+-- Auto-broadcast on login and every 5 minutes
+local broadcastTimer = 0
+local broadcastFrame = CreateFrame("Frame")
+broadcastFrame:SetScript("OnUpdate", function()
+  broadcastTimer = broadcastTimer + arg1
+  if broadcastTimer >= 300 then -- 5 minutes
+    broadcastTimer = 0
+    LeafVE_AchTest:BroadcastAchievements()
+  end
+end)
+
+-- Broadcast on first load
+local loginFrame = CreateFrame("Frame")
+loginFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+loginFrame:SetScript("OnEvent", function()
+  if event == "PLAYER_ENTERING_WORLD" then
+    -- Wait 5 seconds after login before broadcasting
+    local waitTimer = 0
+    this:SetScript("OnUpdate", function()
+      waitTimer = waitTimer + arg1
+      if waitTimer >= 5 then
+        LeafVE_AchTest:BroadcastAchievements()
+        this:SetScript("OnUpdate", nil)
+      end
+    end)
+  end
+end)
+
+Print("Achievement sync system loaded!")
+
 function LeafVE_AchTest:AwardAchievement(achievementID, silent)
   local playerName = UnitName("player")
   if not playerName or playerName == "" then return end
