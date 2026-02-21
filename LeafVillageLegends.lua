@@ -820,52 +820,22 @@ function LeafVE:BroadcastLeaderboardData()
   
   EnsureDB()
   
-  -- Build a compressed leaderboard snapshot
   local data = {}
   
   -- Add my lifetime stats
   local myAlltime = LeafVE_DB.alltime[me] or {L = 0, G = 0, S = 0}
-  table.insert(data, string.format("%s:%d:%d:%d", me, myAlltime.L or 0, myAlltime.G or 0, myAlltime.S or 0))
+  table.insert(data, string.format("L:%s:%d:%d:%d", me, myAlltime.L or 0, myAlltime.G or 0, myAlltime.S or 0))
   
-  -- Compress and send (format: "PlayerName:L:G:S,PlayerName:L:G:S")
+  -- Add my weekly stats
+  local weekAgg = AggForThisWeek()
+  local myWeek = weekAgg[me] or {L = 0, G = 0, S = 0}
+  table.insert(data, string.format("W:%s:%d:%d:%d", me, myWeek.L or 0, myWeek.G or 0, myWeek.S or 0))
+  
+  -- Send message (format: "L:PlayerName:L:G:S,W:PlayerName:L:G:S")
   local message = table.concat(data, ",")
   
   SendAddonMessage("LeafVE", "LBOARD:"..message, "GUILD")
   Print("Broadcasted leaderboard data")
-end
-
-function LeafVE:ReceiveLeaderboardData(sender, playerData)
-  EnsureDB()
-  
-  -- Parse "PlayerName:L:G:S"
-  local colonPos1 = string.find(playerData, ":")
-  if not colonPos1 then return end
-  
-  local playerName = string.sub(playerData, 1, colonPos1 - 1)
-  local rest = string.sub(playerData, colonPos1 + 1)
-  
-  local colonPos2 = string.find(rest, ":")
-  if not colonPos2 then return end
-  
-  local L = tonumber(string.sub(rest, 1, colonPos2 - 1)) or 0
-  local rest2 = string.sub(rest, colonPos2 + 1)
-  
-  local colonPos3 = string.find(rest2, ":")
-  if not colonPos3 then return end
-  
-  local G = tonumber(string.sub(rest2, 1, colonPos3 - 1)) or 0
-  local S = tonumber(string.sub(rest2, colonPos3 + 1)) or 0
-  
-  -- Update database
-  if not LeafVE_DB.alltime[playerName] then
-    LeafVE_DB.alltime[playerName] = {L = 0, G = 0, S = 0}
-  end
-  
-  LeafVE_DB.alltime[playerName].L = L
-  LeafVE_DB.alltime[playerName].G = G
-  LeafVE_DB.alltime[playerName].S = S
-  
-  Print("Updated leaderboard: "..playerName.." (L:"..L.." G:"..G.." S:"..S..")")
 end
 
 function LeafVE:BroadcastPlayerNote(noteText)
@@ -962,7 +932,7 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
     
     return
     
-  -- **NEW: Parse leaderboard sync message**
+    -- **NEW: Parse leaderboard sync message**
   elseif string.sub(message, 1, 7) == "LBOARD:" then
     local lboardData = string.sub(message, 8)
     
@@ -981,7 +951,7 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
       end
       
       LeafVE:ReceiveLeaderboardData(sender, playerEntry)
-    end
+    end  -- ← CLOSE THE WHILE LOOP
     
     -- Refresh leaderboards if open
     if LeafVE.UI and LeafVE.UI.panels then
@@ -994,6 +964,61 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
     end
     
     return
+  end  -- ← CLOSE THE OnAddonMessage FUNCTION
+end
+      
+      function LeafVE:ReceiveLeaderboardData(sender, playerData)
+  EnsureDB()
+  
+  -- Parse "L:PlayerName:L:G:S" or "W:PlayerName:L:G:S"
+  local colonPos1 = string.find(playerData, ":")
+  if not colonPos1 then return end
+  
+  local dataType = string.sub(playerData, 1, colonPos1 - 1) -- "L" or "W"
+  local rest = string.sub(playerData, colonPos1 + 1)
+  
+  local colonPos2 = string.find(rest, ":")
+  if not colonPos2 then return end
+  
+  local playerName = string.sub(rest, 1, colonPos2 - 1)
+  local rest2 = string.sub(rest, colonPos2 + 1)
+  
+  local colonPos3 = string.find(rest2, ":")
+  if not colonPos3 then return end
+  
+  local L = tonumber(string.sub(rest2, 1, colonPos3 - 1)) or 0
+  local rest3 = string.sub(rest2, colonPos3 + 1)
+  
+  local colonPos4 = string.find(rest3, ":")
+  if not colonPos4 then return end
+  
+  local G = tonumber(string.sub(rest3, 1, colonPos4 - 1)) or 0
+  local S = tonumber(string.sub(rest3, colonPos4 + 1)) or 0
+  
+  -- Update the correct database
+  if dataType == "L" then
+    -- Lifetime data
+    if not LeafVE_DB.alltime[playerName] then
+      LeafVE_DB.alltime[playerName] = {L = 0, G = 0, S = 0}
+    end
+    
+    LeafVE_DB.alltime[playerName].L = L
+    LeafVE_DB.alltime[playerName].G = G
+    LeafVE_DB.alltime[playerName].S = S
+    
+  elseif dataType == "W" then
+    -- Weekly data - store in a shared weekly cache
+    if not LeafVE_DB.weeklyCache then
+      LeafVE_DB.weeklyCache = {}
+    end
+    
+    if not LeafVE_DB.weeklyCache[playerName] then
+      LeafVE_DB.weeklyCache[playerName] = {L = 0, G = 0, S = 0}
+    end
+    
+    LeafVE_DB.weeklyCache[playerName].L = L
+    LeafVE_DB.weeklyCache[playerName].G = G
+    LeafVE_DB.weeklyCache[playerName].S = S
   end
 end
 
@@ -1255,13 +1280,13 @@ viewAllBadgesBtn:SetScript("OnClick", function()
 end)
 self.viewAllBadgesBtn = viewAllBadgesBtn
 
-  -- Achievements Section
+-- Achievements Section
   local achLabel = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   achLabel:SetPoint("TOPRIGHT", c, "TOPRIGHT", -40, -300)
   achLabel:SetText("|cFFFFD700Achievements|r")
   
   local achPointsText = c:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  achPointsText:SetPoint("TOP", achLabel, "BOTTOM", 0, -5)
+  achPointsText:SetPoint("TOP", achLabel, "BOTTOM", 0, -5)  -- stays relative to achLabel
   achPointsText:SetWidth(210)
   achPointsText:SetJustifyH("CENTER")
   achPointsText:SetText("0 Points")
@@ -1305,32 +1330,45 @@ viewAllBtn:SetScript("OnClick", function()
 end)
   self.cardViewAllBtn = viewAllBtn
 
+   -- Player Note (matching Wisdom of the Leaf style)
   local notesLabel = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  notesLabel:SetPoint("TOPLEFT", c, "TOPLEFT", 20, -100)
+  notesLabel:SetPoint("TOPLEFT", c, "TOPLEFT", 20, -70)  -- ← MOVED UP (was -100)
   notesLabel:SetText("|cFFFFD700Player Note|r")
 
-  local notesEditBox = CreateFrame("EditBox", nil, c)
-  notesEditBox:SetPoint("TOPLEFT", notesLabel, "BOTTOMLEFT", 0, -5)
-  notesEditBox:SetWidth(210)
-  notesEditBox:SetHeight(60)
+  local notesBox = CreateFrame("Frame", nil, c)
+  notesBox:SetPoint("TOPLEFT", notesLabel, "BOTTOMLEFT", 0, -5)
+  notesBox:SetWidth(125)  -- ← NARROWER (was 210)
+  notesBox:SetHeight(105)  -- ← MATCHES quote height
+  notesBox:SetBackdrop({
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 16, edgeSize = 12,
+    insets = {left = 3, right = 3, top = 3, bottom = 3}
+  })
+  notesBox:SetBackdropColor(0.05, 0.05, 0.08, 0.8)
+  notesBox:SetBackdropBorderColor(THEME.gold[1], THEME.gold[2], THEME.gold[3], 0.6)
+
+  local notesEditBox = CreateFrame("EditBox", nil, notesBox)
+  notesEditBox:SetPoint("TOPLEFT", notesBox, "TOPLEFT", 8, -8)
+  notesEditBox:SetWidth(110)  -- ← NARROWER (was 210)
+  notesEditBox:SetHeight(65)  -- ← ADJUSTED for space
   notesEditBox:SetMultiLine(true)
   notesEditBox:SetAutoFocus(false)
   notesEditBox:SetFontObject(GameFontHighlightSmall)
   notesEditBox:SetMaxLetters(500)
-  
-  -- ... background setup ...
+  notesEditBox:SetTextColor(1, 1, 1)
   
   notesEditBox:SetScript("OnEscapePressed", function() 
     this:ClearFocus() 
   end)
   
-  self.cardNotesEdit = notesEditBox  -- ← MAKE SURE THIS LINE EXISTS
+  self.cardNotesEdit = notesEditBox
   
-  -- Save button
-  local saveNoteBtn = CreateFrame("Button", nil, c, "UIPanelButtonTemplate")
-  saveNoteBtn:SetPoint("TOPLEFT", notesEditBox, "BOTTOMLEFT", 0, -5)
+  -- Save button (positioned at bottom like Kakashi attribution)
+  local saveNoteBtn = CreateFrame("Button", nil, notesBox, "UIPanelButtonTemplate")
+  saveNoteBtn:SetPoint("BOTTOM", notesBox, "BOTTOM", 0, 8)  -- ← BOTTOM ALIGNED
   saveNoteBtn:SetWidth(100)
-  saveNoteBtn:SetHeight(22)
+  saveNoteBtn:SetHeight(20)
   saveNoteBtn:SetText("Save Note")
   SkinButtonAccent(saveNoteBtn)
   
@@ -1346,14 +1384,14 @@ end)
     
     -- Only save if editing your own note
     if me and cardPlayer == me then
-    local text = LeafVE.UI.cardNotesEdit:GetText()  -- Correct - using stored reference
+      local text = LeafVE.UI.cardNotesEdit:GetText()
       if not LeafVE_GlobalDB.playerNotes then
         LeafVE_GlobalDB.playerNotes = {}
       end
       LeafVE_GlobalDB.playerNotes[me] = text
       
       -- Clear focus
-      LeafVE.UI.cardNotesEdit:ClearFocus()  -- Correct
+      LeafVE.UI.cardNotesEdit:ClearFocus()
       
       -- Broadcast the note change
       LeafVE:BroadcastPlayerNote(text)
@@ -1364,6 +1402,34 @@ end)
   end)
   
   self.cardSaveNoteBtn = saveNoteBtn
+
+  -- Kakashi Quote (parallel to Player Note, right side - COMPACT)
+  local quoteLabel = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  quoteLabel:SetPoint("TOPRIGHT", c, "TOPRIGHT", -15, -70)  -- ← MOVED UP (was -100)
+  quoteLabel:SetText("|cFF2DD35CWisdom of the Leaf|r")
+  
+  local quoteBox = CreateFrame("Frame", nil, c)
+  quoteBox:SetPoint("TOPRIGHT", quoteLabel, "BOTTOMRIGHT", 0, -5)
+  quoteBox:SetWidth(125)
+  quoteBox:SetHeight(105)
+  quoteBox:SetBackdrop({
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 16, edgeSize = 12,
+    insets = {left = 3, right = 3, top = 3, bottom = 3}
+  })
+  quoteBox:SetBackdropColor(0.05, 0.05, 0.08, 0.8)
+  quoteBox:SetBackdropBorderColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3], 0.6)
+  
+  local quoteText = quoteBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  quoteText:SetPoint("TOP", quoteBox, "TOP", 0, -8)
+  quoteText:SetWidth(110)
+  quoteText:SetJustifyH("CENTER")
+  quoteText:SetText("|cFFFFAAAA\"In the ninja world, those who break the rules are scum, that's true. But those who abandon their friends are worse than scum.\"|r")
+  
+  local attribution = quoteBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  attribution:SetPoint("BOTTOM", quoteBox, "BOTTOM", 0, 15)
+  attribution:SetText("|cFF2DD35C- Kakashi Hatake|r")
 
   -- Leaf Village Emblem with BIG BRIGHT GLOW
 local leafGlow = c:CreateTexture(nil, "BACKGROUND")
@@ -2692,12 +2758,14 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
   
   local leaders = {}
   
-  if isWeekly then
-    local weekAgg = AggForThisWeek()
-    for _, guildInfo in pairs(LeafVE.guildRosterCache) do
-      local name = guildInfo.name
-      local pts = weekAgg[name] or {L = 0, G = 0, S = 0}
-      local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
+ if isWeekly then
+  -- Use synced weekly cache if available, otherwise fall back to local data
+  local weekAgg = LeafVE_DB.weeklyCache or AggForThisWeek()
+  
+  for _, guildInfo in pairs(LeafVE.guildRosterCache) do
+    local name = guildInfo.name
+    local pts = weekAgg[name] or {L = 0, G = 0, S = 0}
+    local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
       
       table.insert(leaders, {
         name = name, total = total,
@@ -4150,16 +4218,17 @@ ef:RegisterEvent("RAID_ROSTER_UPDATE")
 local groupCheckTimer = 0
 local notificationTimer = 0
 local attendanceTimer = 0
+local badgeSyncTimer = 0
 
 ef:SetScript("OnEvent", function()
   if event == "ADDON_LOADED" and arg1 == LeafVE.name then
     EnsureDB()
     
-    -- Safely register addon message prefixes
+    -- Register addon message prefixes
     if RegisterAddonMessagePrefix then
       RegisterAddonMessagePrefix("LeafVE")
       RegisterAddonMessagePrefix("LeafVEAch")
-      Debug("Registered addon message prefixes")
+      Print("Registered addon message prefixes")
     else
       Print("Warning: RegisterAddonMessagePrefix not available!")
     end
@@ -4167,7 +4236,7 @@ ef:SetScript("OnEvent", function()
     LeafVE:CreateMinimapButton()
     Print("Addon loaded v"..LeafVE.version.."! Use /lve or /leaf to open")
     return
-  end  -- <-- ADD THIS LINE!
+  end
   
   if event == "PLAYER_LOGIN" then
     Print("Loaded v"..LeafVE.version)
@@ -4180,17 +4249,20 @@ ef:SetScript("OnEvent", function()
     broadcastFrame:SetScript("OnUpdate", function()
       broadcastTimer = broadcastTimer + arg1
       if broadcastTimer >= 5 then
-  if InGuild() then
-    LeafVE:BroadcastBadges()
-    LeafVE:BroadcastLeaderboardData()  -- ← ADD THIS
-    
-    local me = ShortName(UnitName("player"))
-    if me and LeafVE_GlobalDB.playerNotes and LeafVE_GlobalDB.playerNotes[me] then
-      LeafVE:BroadcastPlayerNote(LeafVE_GlobalDB.playerNotes[me])
-    end
+        if InGuild() then
+          LeafVE:BroadcastBadges()
+          LeafVE:BroadcastLeaderboardData()
+          
+          local me = ShortName(UnitName("player"))
+          if me and LeafVE_GlobalDB.playerNotes and LeafVE_GlobalDB.playerNotes[me] then
+            LeafVE:BroadcastPlayerNote(LeafVE_GlobalDB.playerNotes[me])
+          end
+        end
+        broadcastFrame:SetScript("OnUpdate", nil)
+      end
+    end)
+    return
   end
-  broadcastFrame:SetScript("OnUpdate", nil)
-end
   
   if event == "CHAT_MSG_ADDON" then
     LeafVE:OnAddonMessage(arg1, arg2, arg3, arg4)
@@ -4202,30 +4274,6 @@ end
     return
   end
 end)
-
-local updateFrame = CreateFrame("Frame")
-updateFrame:SetScript("OnUpdate", function()
-  groupCheckTimer = groupCheckTimer + arg1
-  notificationTimer = notificationTimer + arg1
-  attendanceTimer = attendanceTimer + arg1
-  
-  if groupCheckTimer >= 30 then
-    groupCheckTimer = 0
-    LeafVE:OnGroupUpdate()
-  end
-  
-  if notificationTimer >= 0.1 then
-    notificationTimer = 0
-    LeafVE:ProcessNotifications()
-  end
-  
-  if attendanceTimer >= 300 then
-    attendanceTimer = 0
-    LeafVE:TrackAttendance()
-  end
-end)
-
-local badgeSyncTimer = 0
 
 local updateFrame = CreateFrame("Frame")
 updateFrame:SetScript("OnUpdate", function()
@@ -4257,7 +4305,7 @@ updateFrame:SetScript("OnUpdate", function()
       LeafVE:BroadcastLeaderboardData()
     end
   end
-end)  -- ← THIS WAS MISSING!
+end)
 
 -------------------------------------------------
 -- SLASH COMMANDS
