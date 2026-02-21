@@ -799,7 +799,6 @@ function LeafVE:BroadcastBadges()
   EnsureDB()
   local myBadges = LeafVE_DB.badges[me] or {}
   
-  -- Build compressed badge list: "badgeID:timestamp,badgeID:timestamp,..."
   local badgeData = {}
   for badgeId, timestamp in pairs(myBadges) do
     table.insert(badgeData, badgeId..":"..timestamp)
@@ -812,27 +811,36 @@ function LeafVE:BroadcastBadges()
   end
 end
 
-function LeafVE:BroadcastBadges()
-  if not InGuild() then return end
+-- ADD THIS FUNCTION RIGHT HERE
+function LeafVE:BroadcastPoints()
+  if not InGuild() then 
+    Print("ERROR: Not in guild, cannot broadcast points")
+    return 
+  end
   
   local me = ShortName(UnitName("player"))
-  if not me then return end
+  if not me then 
+    Print("ERROR: Cannot get player name")
+    return 
+  end
   
   EnsureDB()
-  local myBadges = LeafVE_DB.badges[me] or {}
   
-  -- Build compressed badge list: "badgeID:timestamp,badgeID:timestamp,..."
-  local badgeData = {}
-  for badgeId, timestamp in pairs(myBadges) do
-    table.insert(badgeData, badgeId..":"..timestamp)
-  end
+  local alltime = LeafVE_DB.alltime[me] or {L = 0, G = 0, S = 0}
   
-  if table.getn(badgeData) > 0 then
-    local message = table.concat(badgeData, ",")
-    SendAddonMessage("LeafVE", "BADGES:"..message, "GUILD")
-    Print("Broadcast "..table.getn(badgeData).." badges to guild")
+  local message = string.format("L:%d,G:%d,S:%d", alltime.L or 0, alltime.G or 0, alltime.S or 0)
+  
+  Print("Broadcasting points: "..message)
+  local success = SendAddonMessage("LeafVE", "POINTS:"..message, "GUILD")
+  
+  if success then
+    Print("✓ Points broadcast successful")
+  else
+    Print("✗ Points broadcast FAILED")
   end
 end
+
+function LeafVE:BroadcastPlayerNote(noteText)
 
 -- **ADD THIS FUNCTION HERE (Step 3)**
 function LeafVE:BroadcastPlayerNote(noteText)
@@ -1336,13 +1344,15 @@ function LeafVE.UI:ShowAllBadgesPanel(playerName)
     playerName = UnitName("player")
   end
 
+  -- Force refresh by destroying old frame
+  if self.allBadgesFrame then
+    self.allBadgesFrame:Hide()
+    self.allBadgesFrame = nil
+  end
+
   -- Create main frame (only once)
   if not self.allBadgesFrame then
-    local f = CreateFrame("Frame", "LeafVEAllBadgesFrame", UIParent)
-    f:SetWidth(450)
-    f:SetFrameStrata("DIALOG")
-    f:EnableMouse(true)
-    
+   
     -- Anchor to right side of main UI panel
     if LeafVE.UI.frame then
       f:SetPoint("TOPLEFT", LeafVE.UI.frame, "TOPRIGHT", 5, 0)
@@ -1363,10 +1373,10 @@ function LeafVE.UI:ShowAllBadgesPanel(playerName)
     })
     f:SetBackdropColor(0, 0, 0, 1)
     
-    -- Title
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    f.title:SetPoint("TOP", f, "TOP", 0, -15)
-    f.title:SetTextColor(THEME.gold[1], THEME.gold[2], THEME.gold[3])
+-- Title
+f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+f.title:SetPoint("TOP", f, "TOP", 0, -15)
+f.title:SetTextColor(THEME.gold[1], THEME.gold[2], THEME.gold[3])
     
     -- Close button
     local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
@@ -1389,24 +1399,18 @@ function LeafVE.UI:ShowAllBadgesPanel(playerName)
     
     self.allBadgesFrame = f
   end
-local f = self.allBadgesFrame
-f.title:SetText(playerName .. "'s Badge Collection")
 
--- Destroy and recreate content frame to force refresh
-if f.content then
-  f.content:Hide()
-  f.content:SetParent(nil)
-  f.content = nil
-end
-
--- Create fresh content frame
-local content = CreateFrame("Frame", nil, f.scrollFrame)
-content:SetWidth(400)
-content:SetHeight(1)
-f.scrollFrame:SetScrollChild(content)
-f.content = content
-
-f.badgeIcons = {}
+  local f = self.allBadgesFrame
+  f.title:SetText(playerName .. "'s Badge Collection")
+  
+  -- Clear existing content
+  if f.badgeIcons then
+    for _, icon in ipairs(f.badgeIcons) do
+      icon:Hide()
+      icon:SetParent(nil)
+    end
+  end
+  f.badgeIcons = {}
   
 -- Get player's badges
 EnsureDB()
@@ -1420,15 +1424,6 @@ if shortName and LeafVE_DB.badges[shortName] then
     }
   end
 end
-
--- DEBUG: Print what we found
-DEFAULT_CHAT_FRAME:AddMessage("Showing badges for: " .. playerName)
-DEFAULT_CHAT_FRAME:AddMessage("Short name: " .. tostring(shortName))
-local count = 0
-for k, v in pairs(playerBadges) do
-  count = count + 1
-end
-DEFAULT_CHAT_FRAME:AddMessage("Found " .. count .. " earned badges")
   
 -- Organize badges by category
 local categories = {}
@@ -4057,24 +4052,37 @@ ef:RegisterEvent("RAID_ROSTER_UPDATE")
 local groupCheckTimer = 0
 local notificationTimer = 0
 local attendanceTimer = 0
+local badgeSyncTimer = 0
+local pointsSyncTimer = 0
 
 ef:SetScript("OnEvent", function()
   if event == "ADDON_LOADED" and arg1 == LeafVE.name then
     EnsureDB()
     
-    -- Safely register addon message prefixes
+    -- Register addon message prefixes with debug output
     if RegisterAddonMessagePrefix then
-      RegisterAddonMessagePrefix("LeafVE")
-      RegisterAddonMessagePrefix("LeafVEAch")
-      Debug("Registered addon message prefixes")
+      local success1 = RegisterAddonMessagePrefix("LeafVE")
+      local success2 = RegisterAddonMessagePrefix("LeafVEAch")
+      
+      if success1 then
+        Print("✓ Registered LeafVE prefix")
+      else
+        Print("✗ FAILED to register LeafVE prefix!")
+      end
+      
+      if success2 then
+        Print("✓ Registered LeafVEAch prefix")
+      else
+        Print("✗ FAILED to register LeafVEAch prefix!")
+      end
     else
-      Print("Warning: RegisterAddonMessagePrefix not available!")
+      Print("✗ RegisterAddonMessagePrefix not available!")
     end
     
     LeafVE:CreateMinimapButton()
     Print("Addon loaded v"..LeafVE.version.."! Use /lve or /leaf to open")
     return
-  end  -- <-- ADD THIS LINE!
+  end
   
   if event == "PLAYER_LOGIN" then
     Print("Loaded v"..LeafVE.version)
@@ -4089,8 +4097,8 @@ ef:SetScript("OnEvent", function()
       if broadcastTimer >= 5 then
         if InGuild() then
           LeafVE:BroadcastBadges()
+          LeafVE:BroadcastPoints()  -- ← ADD THIS
           
-          -- **NEW: Broadcast player note**
           local me = ShortName(UnitName("player"))
           if me and LeafVE_GlobalDB.playerNotes and LeafVE_GlobalDB.playerNotes[me] then
             LeafVE:BroadcastPlayerNote(LeafVE_GlobalDB.playerNotes[me])
@@ -4118,31 +4126,8 @@ updateFrame:SetScript("OnUpdate", function()
   groupCheckTimer = groupCheckTimer + arg1
   notificationTimer = notificationTimer + arg1
   attendanceTimer = attendanceTimer + arg1
-  
-  if groupCheckTimer >= 30 then
-    groupCheckTimer = 0
-    LeafVE:OnGroupUpdate()
-  end
-  
-  if notificationTimer >= 0.1 then
-    notificationTimer = 0
-    LeafVE:ProcessNotifications()
-  end
-  
-  if attendanceTimer >= 300 then
-    attendanceTimer = 0
-    LeafVE:TrackAttendance()
-  end
-end)
-
-local badgeSyncTimer = 0
-
-local updateFrame = CreateFrame("Frame")
-updateFrame:SetScript("OnUpdate", function()
-  groupCheckTimer = groupCheckTimer + arg1
-  notificationTimer = notificationTimer + arg1
-  attendanceTimer = attendanceTimer + arg1
   badgeSyncTimer = badgeSyncTimer + arg1
+  pointsSyncTimer = pointsSyncTimer + arg1
   
   if groupCheckTimer >= 30 then
     groupCheckTimer = 0
@@ -4166,11 +4151,49 @@ updateFrame:SetScript("OnUpdate", function()
       LeafVE:BroadcastBadges()
     end
   end
+  
+  -- Sync points every 5 minutes
+  if pointsSyncTimer >= 300 then
+    pointsSyncTimer = 0
+    if InGuild() then
+      LeafVE:BroadcastPoints()
+    end
+  end
 end)
 
 -------------------------------------------------
 -- SLASH COMMANDS
 -------------------------------------------------
+
+SLASH_POINTSSYNC1 = "/pointssync"
+SlashCmdList["POINTSSYNC"] = function()
+  LeafVE:BroadcastPoints()
+  Print("Broadcasting points to guild...")
+end
+
+SLASH_TESTCOMMS1 = "/testcomms"
+SlashCmdList["TESTCOMMS"] = function()
+  Print("=== TESTING ADDON COMMUNICATION ===")
+  
+  if InGuild() then
+    Print("✓ In guild")
+  else
+    Print("✗ NOT in guild!")
+    return
+  end
+  
+  Print("Attempting to send test message...")
+  
+  local success = SendAddonMessage("LeafVE", "TEST:hello", "GUILD")
+  if success then
+    Print("✓ SendAddonMessage returned success")
+  else
+    Print("✗ SendAddonMessage FAILED")
+  end
+  
+  Print("If you don't see 'Received TEST' below in 1 second, addon comms are broken!")
+  Print("===================================")
+end
 
 SLASH_NOTESYNC1 = "/notesync"
 SlashCmdList["NOTESYNC"] = function()
