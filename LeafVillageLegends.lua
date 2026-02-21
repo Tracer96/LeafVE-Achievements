@@ -801,6 +801,7 @@ function LeafVE:GiveShoutout(targetName, reason)
     
     message = message .. " (+1 Leaf Point)"
     SendChatMessage(message, "GUILD")
+    SendAddonMessage("LeafVE", "SHOUTOUT:"..giverName..":"..targetName, "GUILD")
   end
   
   local remaining = SHOUTOUT_MAX_PER_DAY - count - 1
@@ -952,6 +953,43 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
     
     return
     
+  -- Parse shoutout sync message
+  elseif string.sub(message, 1, 8) == "SHOUTOUT:" then
+    local shoutData = string.sub(message, 9)
+    local colonPos = string.find(shoutData, ":")
+    if colonPos then
+      local msgGiver = string.sub(shoutData, 1, colonPos - 1)
+      local targetName = string.sub(shoutData, colonPos + 1)
+      -- Validate both names are non-empty
+      if msgGiver ~= "" and targetName ~= "" then
+        -- Verify sender matches the declared giver (security check)
+        if Lower(sender) == Lower(msgGiver) then
+          local me = ShortName(UnitName("player"))
+          -- Skip if we are the giver (already recorded via AddPoints in GiveShoutout)
+          if not (me and Lower(me) == Lower(msgGiver)) then
+            EnsureDB()
+            -- Deduplicate: only record if not already tracked for today
+            local today = DayKey()
+            local alreadyRecorded = false
+            if LeafVE_DB.shoutouts[msgGiver] and LeafVE_DB.shoutouts[msgGiver][targetName] then
+              local existingDay = DayKeyFromTS(LeafVE_DB.shoutouts[msgGiver][targetName])
+              if existingDay == today then
+                alreadyRecorded = true
+              end
+            end
+            if not alreadyRecorded then
+              if not LeafVE_DB.shoutouts[msgGiver] then
+                LeafVE_DB.shoutouts[msgGiver] = {}
+              end
+              LeafVE_DB.shoutouts[msgGiver][targetName] = Now()
+              self:AddPoints(targetName, "S", 1)
+            end
+          end
+        end
+      end
+    end
+    return
+
   -- Parse player note sync message
   elseif string.sub(message, 1, 5) == "NOTE:" then
     local noteText = string.sub(message, 6)
