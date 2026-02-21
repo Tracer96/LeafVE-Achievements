@@ -826,21 +826,9 @@ function LeafVE:BroadcastLeaderboardData()
   local myAlltime = LeafVE_DB.alltime[me] or {L = 0, G = 0, S = 0}
   table.insert(data, string.format("L:%s:%d:%d:%d", me, myAlltime.L or 0, myAlltime.G or 0, myAlltime.S or 0))
   
-  -- Add my weekly stats (always use fresh local data for yourself)
+  -- Add my weekly stats
   local weekAgg = AggForThisWeek()
   local myWeek = weekAgg[me] or {L = 0, G = 0, S = 0}
-  
-  -- Update your own cache before broadcasting
-  if not LeafVE_DB.weeklyCache then
-    LeafVE_DB.weeklyCache = {}
-  end
-  LeafVE_DB.weeklyCache[me] = {
-    L = myWeek.L or 0,
-    G = myWeek.G or 0,
-    S = myWeek.S or 0,
-    lastUpdate = Now()
-  }
-  
   table.insert(data, string.format("W:%s:%d:%d:%d", me, myWeek.L or 0, myWeek.G or 0, myWeek.S or 0))
   
   -- Send message (format: "L:PlayerName:L:G:S,W:PlayerName:L:G:S")
@@ -866,48 +854,11 @@ function LeafVE:BroadcastPlayerNote(noteText)
 end
 
 function LeafVE:OnAddonMessage(prefix, message, channel, sender)
-  -- Accept both LeafVE and LEAFVE_LB prefixes
-  if prefix ~= "LeafVE" and prefix ~= "LEAFVE_LB" then return end
+  if prefix ~= "LeafVE" then return end
   if channel ~= "GUILD" then return end
   
   sender = ShortName(sender)
   if not sender then return end
-  
-  -- Handle LEAFVE_LB prefix (new leaderboard sync format)
-  if prefix == "LEAFVE_LB" then
-    -- Parse multiple entries separated by |
-    local startPos = 1
-    while startPos <= string.len(message) do
-      local pipePos = string.find(message, "|", startPos)
-      local entry
-      
-      if pipePos then
-        entry = string.sub(message, startPos, pipePos - 1)
-        startPos = pipePos + 1
-      else
-        entry = string.sub(message, startPos)
-        startPos = string.len(message) + 1
-      end
-      
-      if string.len(entry) > 0 then
-        LeafVE:ReceiveLeaderboardData(sender, entry)
-      end
-    end
-    
-    -- Refresh leaderboards if open
-    if LeafVE.UI and LeafVE.UI.panels then
-      if LeafVE.UI.panels.weeklyLeaderboard then
-        LeafVE.UI:RefreshLeaderboard("weeklyLeaderboard")
-      end
-      if LeafVE.UI.panels.lifetimeLeaderboard then
-        LeafVE.UI:RefreshLeaderboard("lifetimeLeaderboard")
-      end
-    end
-    
-    return
-  end
-  
-  -- Handle LeafVE prefix (existing badge/note messages)
   
   -- Parse badge sync message
   if string.sub(message, 1, 7) == "BADGES:" then
@@ -980,7 +931,40 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
     end
     
     return
-  end
+    
+    -- **NEW: Parse leaderboard sync message**
+  elseif string.sub(message, 1, 7) == "LBOARD:" then
+    local lboardData = string.sub(message, 8)
+    
+    -- Parse comma-separated player entries
+    local startPos = 1
+    while startPos <= string.len(lboardData) do
+      local commaPos = string.find(lboardData, ",", startPos)
+      local playerEntry
+      
+      if commaPos then
+        playerEntry = string.sub(lboardData, startPos, commaPos - 1)
+        startPos = commaPos + 1
+      else
+        playerEntry = string.sub(lboardData, startPos)
+        startPos = string.len(lboardData) + 1
+      end
+      
+      LeafVE:ReceiveLeaderboardData(sender, playerEntry)
+    end  -- ← CLOSE THE WHILE LOOP
+    
+    -- Refresh leaderboards if open
+    if LeafVE.UI and LeafVE.UI.panels then
+      if LeafVE.UI.panels.leaderLife and LeafVE.UI.panels.leaderLife:IsVisible() then
+        LeafVE.UI:RefreshLeaderboard("leaderLife")
+      end
+      if LeafVE.UI.panels.leaderWeek and LeafVE.UI.panels.leaderWeek:IsVisible() then
+        LeafVE.UI:RefreshLeaderboard("leaderWeek")
+      end
+    end
+    
+    return
+  end  -- ← CLOSE THE OnAddonMessage FUNCTION
 end
       
       function LeafVE:ReceiveLeaderboardData(sender, playerData)
@@ -1029,20 +1013,15 @@ end
     end
     
     if not LeafVE_DB.weeklyCache[playerName] then
-      LeafVE_DB.weeklyCache[playerName] = {L = 0, G = 0, S = 0, lastUpdate = 0}
+      LeafVE_DB.weeklyCache[playerName] = {L = 0, G = 0, S = 0}
     end
     
-    -- Only update if the received data is newer or different
-    local existing = LeafVE_DB.weeklyCache[playerName]
-    if L ~= existing.L or G ~= existing.G or S ~= existing.S then
-      LeafVE_DB.weeklyCache[playerName].L = L
-      LeafVE_DB.weeklyCache[playerName].G = G
-      LeafVE_DB.weeklyCache[playerName].S = S
-      LeafVE_DB.weeklyCache[playerName].lastUpdate = Now()
-      Print("Updated weekly data for "..playerName..": L="..L.." G="..G.." S="..S)
-    end
+    LeafVE_DB.weeklyCache[playerName].L = L
+    LeafVE_DB.weeklyCache[playerName].G = G
+    LeafVE_DB.weeklyCache[playerName].S = S
   end
 end
+
 function FindUnitToken(playerName)
   if UnitName("player") == playerName then return "player" end
   if UnitExists("target") and UnitName("target") == playerName then return "target" end
@@ -2829,40 +2808,15 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
   
   local leaders = {}
   
-  if isWeekly then
-    -- Merge cached weekly data with local live data
-    local weekAgg = AggForThisWeek()  -- Get local player's current week
-    
-    -- Initialize weeklyCache if needed
-    if not LeafVE_DB.weeklyCache then
-      LeafVE_DB.weeklyCache = {}
-    end
-    
-    -- Merge: use cached data for offline players, live data for local player
-    local me = ShortName(UnitName("player"))
-    
-    for _, guildInfo in pairs(LeafVE.guildRosterCache) do
-      local name = guildInfo.name
+ if isWeekly then
+  -- Use synced weekly cache if available, otherwise fall back to local data
+  local weekAgg = LeafVE_DB.weeklyCache or AggForThisWeek()
+  
+  for _, guildInfo in pairs(LeafVE.guildRosterCache) do
+    local name = guildInfo.name
+    local pts = weekAgg[name] or {L = 0, G = 0, S = 0}
+    local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
       
-      -- Use live data for yourself, cached for others
-      local pts
-      if name == me then
-        pts = weekAgg[name] or {L = 0, G = 0, S = 0}
-        
-        -- Update cache with your current data
-        LeafVE_DB.weeklyCache[name] = {
-          L = pts.L or 0,
-          G = pts.G or 0,
-          S = pts.S or 0,
-          lastUpdate = Now()
-        }
-      else
-        -- Use cached data for other players, fall back to live if not cached
-        pts = LeafVE_DB.weeklyCache[name] or weekAgg[name] or {L = 0, G = 0, S = 0}
-      end
-      
-      local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
-        
       table.insert(leaders, {
         name = name, total = total,
         L = pts.L or 0, G = pts.G or 0, S = pts.S or 0,
@@ -2870,7 +2824,6 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
       })
     end
   else
-    -- Lifetime leaderboard
     for _, guildInfo in pairs(LeafVE.guildRosterCache) do
       local name = guildInfo.name
       local pts = LeafVE_DB.alltime[name] or {L = 0, G = 0, S = 0}
@@ -2882,7 +2835,7 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
         class = guildInfo.class or "Unknown"
       })
     end
-  end  -- ← THIS WAS MISSING! Closes the "if isWeekly then"
+  end
   
   table.sort(leaders, function(a, b)
     if a.total == b.total then
@@ -4420,24 +4373,6 @@ seterrorhandler(function(err)
   end
 end)
 
-function LeafVE:CheckWeeklyReset()
-  EnsureDB()
-  
-  if not LeafVE_DB.lastWeekStart then
-    LeafVE_DB.lastWeekStart = WeekStartTS(Now())
-    return
-  end
-  
-  local currentWeekStart = WeekStartTS(Now())
-  
-  -- If it's a new week, clear the weekly cache
-  if currentWeekStart ~= LeafVE_DB.lastWeekStart then
-    Print("New week detected! Resetting weekly leaderboard cache.")
-    LeafVE_DB.weeklyCache = {}
-    LeafVE_DB.lastWeekStart = currentWeekStart
-  end
-end
-
 -------------------------------------------------
 -- EVENT HANDLERS
 -------------------------------------------------
@@ -4453,6 +4388,7 @@ local notificationTimer = 0
 local attendanceTimer = 0
 local badgeSyncTimer = 0
 
+ef:SetScript("OnEvent", function()
   if event == "ADDON_LOADED" and arg1 == LeafVE.name then
     EnsureDB()
     
@@ -4460,7 +4396,6 @@ local badgeSyncTimer = 0
     if RegisterAddonMessagePrefix then
       RegisterAddonMessagePrefix("LeafVE")
       RegisterAddonMessagePrefix("LeafVEAch")
-      RegisterAddonMessagePrefix("LEAFVE_LB")  -- ← ADD THIS LINE
       Print("Registered addon message prefixes")
     else
       Print("Warning: RegisterAddonMessagePrefix not available!")
@@ -4475,7 +4410,6 @@ local badgeSyncTimer = 0
     Print("Loaded v"..LeafVE.version)
     Print("Auto-tracking: Login & Group points enabled!")
     LeafVE:CheckDailyLogin()
-    LeafVE:CheckWeeklyReset()
     
     -- Broadcast after 5 seconds
     local broadcastTimer = 0
