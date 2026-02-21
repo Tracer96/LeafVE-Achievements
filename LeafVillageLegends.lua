@@ -13,6 +13,8 @@ local GROUP_MIN_TIME = 300
 local GROUP_COOLDOWN = 3600
 local GUILD_ROSTER_CACHE_DURATION = 30
 local SHOUTOUT_MAX_PER_DAY = 2
+local LBOARD_RESYNC_COOLDOWN = 30  -- seconds between outgoing LBOARDREQ messages
+local LBOARD_RESPOND_COOLDOWN = 30 -- seconds between responses to LBOARDREQ
 
 local LEAF_EMBLEM = "Interface\\AddOns\\LeafVillageLegends\\media\\leaf.tga"
 local LEAF_FALLBACK = "Interface\\Icons\\INV_Misc_Herb_01"
@@ -90,6 +92,8 @@ LeafVE.currentGroupMembers = {}
 LeafVE.notificationQueue = {}
 LeafVE.errorLog = {}
 LeafVE.maxErrors = 50
+LeafVE.lastResyncRequestAt = 0
+LeafVE.lastResyncRespondAt = 0
 
 local function SetSize(f, w, h)
   if not f then return end
@@ -845,6 +849,14 @@ function LeafVE:BroadcastLeaderboardData()
   Print("Broadcasted leaderboard data")
 end
 
+function LeafVE:SendResyncRequest()
+  if not InGuild() then return end
+  local now = Now()
+  if (now - self.lastResyncRequestAt) < LBOARD_RESYNC_COOLDOWN then return end
+  self.lastResyncRequestAt = now
+  SendAddonMessage("LeafVE", "LBOARDREQ", "GUILD")
+end
+
 function LeafVE:BroadcastPlayerNote(noteText)
   if not InGuild() then return end
   
@@ -867,6 +879,19 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
   sender = ShortName(sender)
   if not sender then return end
   
+  -- Handle on-demand resync request
+  if message == "LBOARDREQ" then
+    local me = ShortName(UnitName("player"))
+    if me and sender ~= me then
+      local now = Now()
+      if (now - self.lastResyncRespondAt) >= LBOARD_RESPOND_COOLDOWN then
+        self.lastResyncRespondAt = now
+        LeafVE:BroadcastLeaderboardData()
+      end
+    end
+    return
+  end
+
   -- Parse badge sync message
   if string.sub(message, 1, 7) == "BADGES:" then
     local badgeData = string.sub(message, 8)
@@ -1004,18 +1029,31 @@ end
   local S = tonumber(string.sub(rest3, colonPos4 + 1)) or 0
   
   -- Store into dedicated lboard tables (never overwrite local accounting)
+  local now = Now()
   if dataType == "L" then
-    -- Lifetime synced data
-    LeafVE_DB.lboard.alltime[playerName] = {L = L, G = G, S = S}
-    LeafVE_DB.lboard.updatedAt[playerName] = Now()
-    
+    -- Lifetime synced data: only overwrite if newer than what we have
+    local existing = LeafVE_DB.lboard.updatedAt[playerName] and LeafVE_DB.lboard.updatedAt[playerName].lifetime
+    if not existing or now > existing then
+      LeafVE_DB.lboard.alltime[playerName] = {L = L, G = G, S = S}
+      if not LeafVE_DB.lboard.updatedAt[playerName] then LeafVE_DB.lboard.updatedAt[playerName] = {} end
+      LeafVE_DB.lboard.updatedAt[playerName].lifetime = now
+    end
+
   elseif string.sub(dataType, 1, 1) == "W" then
     -- Weekly synced data; extract week key (new format "W20260217", old format "W" → current week)
     local wk = string.sub(dataType, 2)
-    if wk == "" then wk = WeekKey() end  -- backward compat: old "W:Name:L:G:S"
-    if not LeafVE_DB.lboard.weekly[wk] then LeafVE_DB.lboard.weekly[wk] = {} end
-    LeafVE_DB.lboard.weekly[wk][playerName] = {L = L, G = G, S = S}
-    LeafVE_DB.lboard.updatedAt[playerName] = Now()
+    if wk == "" then wk = WeekKey() end  -- backward compatibility: old "W:Name:L:G:S"
+    -- Only store if this is the current week; discard stale week data
+    local currentWk = WeekKey()
+    if wk ~= currentWk then return end
+    -- Freshness guard: only overwrite if newer than what we have for this week
+    local existingWeekAt = LeafVE_DB.lboard.updatedAt[playerName] and LeafVE_DB.lboard.updatedAt[playerName]["week_"..wk]
+    if not existingWeekAt or now > existingWeekAt then
+      if not LeafVE_DB.lboard.weekly[wk] then LeafVE_DB.lboard.weekly[wk] = {} end
+      LeafVE_DB.lboard.weekly[wk][playerName] = {L = L, G = G, S = S}
+      if not LeafVE_DB.lboard.updatedAt[playerName] then LeafVE_DB.lboard.updatedAt[playerName] = {} end
+      LeafVE_DB.lboard.updatedAt[playerName]["week_"..wk] = now
+    end
   end
 end
 
@@ -1025,6 +1063,16 @@ function FindUnitToken(playerName)
   for i = 1, 4 do local unit = "party"..i if UnitExists(unit) and UnitName(unit) == playerName then return unit end end
   for i = 1, 40 do local unit = "raid"..i if UnitExists(unit) and UnitName(unit) == playerName then return unit end end
   return nil
+end
+
+function LeafVE:PurgeStaleWeeklyData()
+  EnsureDB()
+  local currentWk = WeekKey()
+  for wk in pairs(LeafVE_DB.lboard.weekly) do
+    if wk ~= currentWk then
+      LeafVE_DB.lboard.weekly[wk] = nil
+    end
+  end
 end
 
 function AggForThisWeek()
@@ -2796,7 +2844,10 @@ end
 
 function LeafVE.UI:RefreshLeaderboard(panelName)
   if not self.panels or not self.panels[panelName] then return end
-  
+
+  -- Trigger an on-demand resync if not done recently
+  LeafVE:SendResyncRequest()
+
   local panel = self.panels[panelName]
   local isWeekly = panel.isWeekly
   
@@ -4430,7 +4481,8 @@ ef:SetScript("OnEvent", function()
     Print("Loaded v"..LeafVE.version)
     Print("Auto-tracking: Login & Group points enabled!")
     LeafVE:CheckDailyLogin()
-    
+    LeafVE:PurgeStaleWeeklyData()
+
     -- Broadcast after 5 seconds
     local broadcastTimer = 0
     local broadcastFrame = CreateFrame("Frame")
@@ -4503,6 +4555,13 @@ SLASH_LBOARDSYNC1 = "/lboardsync"
 SlashCmdList["LBOARDSYNC"] = function()
   LeafVE:BroadcastLeaderboardData()
   Print("Broadcasting leaderboard data to guild...")
+end
+
+SLASH_LBOARDREQ1 = "/lboardreq"
+SlashCmdList["LBOARDREQ"] = function()
+  LeafVE.lastResyncRequestAt = 0  -- bypass cooldown for manual request
+  LeafVE:SendResyncRequest()
+  Print("Sent leaderboard resync request to guild.")
 end
 
 SLASH_NOTESYNC1 = "/notesync"
