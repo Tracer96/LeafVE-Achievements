@@ -838,7 +838,7 @@ function LeafVE:BroadcastLeaderboardData()
   table.insert(data, string.format("L:%s:%d:%d:%d", me, myAlltime.L or 0, myAlltime.G or 0, myAlltime.S or 0))
   
   -- Add my weekly stats (keyed by week start date)
-  local weekAgg = AggForThisWeek()
+  local weekAgg = (AggForThisWeek())
   local myWeek = weekAgg[me] or {L = 0, G = 0, S = 0}
   table.insert(data, string.format("W%s:%s:%d:%d:%d", wk, me, myWeek.L or 0, myWeek.G or 0, myWeek.S or 0))
   
@@ -2873,7 +2873,7 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
     -- Use synced weekly data for the current week key; fall back to local aggregation
     local wk = WeekKey()
     local syncedWeek = LeafVE_DB.lboard.weekly[wk]
-    local localWeek = AggForThisWeek()
+    local localWeek = (AggForThisWeek())
     
     for _, guildInfo in pairs(memberSet) do
       local name = guildInfo.name
@@ -4267,7 +4267,7 @@ function LeafVE.UI:Refresh()
       ))
     end
     
-    local weekAgg = AggForThisWeek()
+    local weekAgg = (AggForThisWeek())
     local weekT = weekAgg[me] or {L = 0, G = 0, S = 0}
     if self.panels.me.weekStats then
       self.panels.me.weekStats:SetText(string.format(
