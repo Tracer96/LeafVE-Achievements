@@ -1113,8 +1113,8 @@ end)
   self.cardViewAllBtn = viewAllBtn
 
   local notesLabel = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  notesLabel:SetPoint("TOPLEFT", c, "TOPLEFT", 10, -450)
-  notesLabel:SetText("|cFF2DD35CPlayer Note|r")
+  notesLabel:SetPoint("TOPLEFT", c, "TOPLEFT", 20, -100)
+  notesLabel:SetText("|cFFFFD700Player Note|r")
 
   local notesEditBox = CreateFrame("EditBox", nil, c)
   notesEditBox:SetPoint("TOPLEFT", notesLabel, "BOTTOMLEFT", 0, -5)
@@ -1125,24 +1125,13 @@ end)
   notesEditBox:SetFontObject(GameFontHighlightSmall)
   notesEditBox:SetMaxLetters(500)
   
-  local notesEditBG = CreateFrame("Frame", nil, c)
-  notesEditBG:SetPoint("TOPLEFT", notesEditBox, "TOPLEFT", -5, 5)
-  notesEditBG:SetPoint("BOTTOMRIGHT", notesEditBox, "BOTTOMRIGHT", 5, -5)
-  notesEditBG:SetBackdrop({
-    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true, tileSize = 16, edgeSize = 12,
-    insets = {left = 3, right = 3, top = 3, bottom = 3}
-  })
-  notesEditBG:SetBackdropColor(0, 0, 0, 0.5)
-  notesEditBG:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
-  notesEditBG:SetFrameLevel(notesEditBox:GetFrameLevel() - 1)
+  -- ... background setup ...
   
   notesEditBox:SetScript("OnEscapePressed", function() 
     this:ClearFocus() 
   end)
   
-  self.cardNotesEdit = notesEditBox
+  self.cardNotesEdit = notesEditBox  -- ← MAKE SURE THIS LINE EXISTS
   
   -- Save button
   local saveNoteBtn = CreateFrame("Button", nil, c, "UIPanelButtonTemplate")
@@ -1164,14 +1153,14 @@ end)
     
     -- Only save if editing your own note
     if me and cardPlayer == me then
-      local text = notesEditBox:GetText()
+    local text = LeafVE.UI.cardNotesEdit:GetText()  -- Correct - using stored reference
       if not LeafVE_GlobalDB.playerNotes then
         LeafVE_GlobalDB.playerNotes = {}
       end
       LeafVE_GlobalDB.playerNotes[me] = text
       
       -- Clear focus
-      notesEditBox:ClearFocus()
+      LeafVE.UI.cardNotesEdit:ClearFocus()  -- Correct
       
       -- Broadcast the note change
       LeafVE:BroadcastPlayerNote(text)
@@ -1403,7 +1392,7 @@ function LeafVE.UI:ShowPlayerCard(playerName)
     Print("ERROR: UpdateCardRecentBadges function does not exist!")
   end
   
-    if self.cardNotesEdit then
+ if self.cardNotesEdit then
     EnsureDB()
     if not LeafVE_GlobalDB.playerNotes then
       LeafVE_GlobalDB.playerNotes = {}
@@ -1414,12 +1403,11 @@ function LeafVE.UI:ShowPlayerCard(playerName)
     
     local me = ShortName(UnitName("player"))
     
-    -- Only allow editing your own note
     if me and playerName == me then
       -- Enable editing
       self.cardNotesEdit:EnableMouse(true)
       self.cardNotesEdit:EnableKeyboard(true)
-      self.cardNotesEdit:SetTextColor(1, 1, 1)
+      self.cardNotesEdit:SetTextColor(1, 1, 1, 1)  -- Bright white (RGBA)
       self.cardNotesEdit:SetAlpha(1)
       
       -- Show save button
@@ -1431,7 +1419,7 @@ function LeafVE.UI:ShowPlayerCard(playerName)
       -- Disable editing (Vanilla compatible)
       self.cardNotesEdit:EnableMouse(false)
       self.cardNotesEdit:EnableKeyboard(false)
-      self.cardNotesEdit:SetTextColor(0.5, 0.5, 0.5)
+      self.cardNotesEdit:SetTextColor(0.9, 0.9, 0.9)  -- Slightly dimmed white for other players
       self.cardNotesEdit:SetAlpha(0.7)
       
       -- Hide save button for other players
@@ -1827,15 +1815,12 @@ local function BuildMyPanel(panel)
   local maxWidth = 500
   
   local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  h:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -12)
-  h:SetText("My Stats")
-  h:SetTextColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3])
+  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetText("|cFFFFD700My Stats|r")
 
-  local infoText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  infoText:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -40)
-  infoText:SetWidth(maxWidth)
-  infoText:SetJustifyH("LEFT")
-  infoText:SetText("View your contribution statistics.")
+  local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  subtitle:SetPoint("TOP", h, "BOTTOM", 0, -3)
+  subtitle:SetText("|cFF888888View your contribution statistics|r")
   
   local todayLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   todayLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -80)
@@ -1890,15 +1875,12 @@ end
 
 local function BuildShoutoutsPanel(panel)
   local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  h:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -12)
-  h:SetText("Shoutouts")
-  h:SetTextColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3])
+  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetText("|cFFFFD700Shoutouts|r")
 
-  local infoText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  infoText:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -40)
-  infoText:SetWidth(500)
-  infoText:SetJustifyH("LEFT")
-  infoText:SetText("Give recognition to guild members! You can give 2 shoutouts per day.")
+  local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  subtitle:SetPoint("TOP", h, "BOTTOM", 0, -3)
+  subtitle:SetText("|cFF888888Give recognition to guild members! You can give 2 shoutouts per day.|r")
   
   local usageText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   usageText:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -80)
@@ -2072,11 +2054,77 @@ local function CreateScrollablePanel(panel, title, desc)
 end
 
 local function BuildLeaderboardPanel(panel, isWeekly)
-  CreateScrollablePanel(
-    panel,
-    isWeekly and "Weekly Leaderboard" or "Lifetime Leaderboard",
-    isWeekly and "Top 20 contributors this week." or "Top 20 contributors of all time."
-  )
+  local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetText(isWeekly and "|cFFFFD700Weekly Leaderboard|r" or "|cFFFFD700Lifetime Leaderboard|r")
+  
+  local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  subtitle:SetPoint("TOP", h, "BOTTOM", 0, -3)
+  subtitle:SetText(isWeekly and "|cFF888888Top performers ranked by achievement points|r" or "|cFF888888Top performers ranked by achievement points|r")
+  
+  local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
+  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -45)
+  scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 12)
+  scrollFrame:EnableMouse(true)
+  scrollFrame:EnableMouseWheel(true)
+  
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetWidth(500)
+  scrollChild:SetHeight(1)
+  scrollFrame:SetScrollChild(scrollChild)
+  
+  scrollFrame:SetScript("OnMouseWheel", function()
+    local current = scrollFrame:GetVerticalScroll()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    local newScroll = current - (arg1 * 40)
+    if newScroll < 0 then newScroll = 0 end
+    if newScroll > maxScroll then newScroll = maxScroll end
+    scrollFrame:SetVerticalScroll(newScroll)
+  end)
+  
+  local scrollBar = CreateFrame("Slider", nil, panel)
+  scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -45)
+  scrollBar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 12)
+  scrollBar:SetWidth(16)
+  scrollBar:SetOrientation("VERTICAL")
+  scrollBar:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
+  scrollBar:SetMinMaxValues(0, 100)
+  scrollBar:SetValue(0)
+  
+  local thumb = scrollBar:GetThumbTexture()
+  thumb:SetWidth(16)
+  thumb:SetHeight(24)
+  
+  scrollBar:SetBackdrop({
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 8, edgeSize = 8,
+    insets = {left = 2, right = 2, top = 2, bottom = 2}
+  })
+  scrollBar:SetBackdropColor(0, 0, 0, 0.3)
+  scrollBar:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+  
+  scrollBar:SetScript("OnValueChanged", function()
+    local value = scrollBar:GetValue()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    if maxScroll > 0 then
+      scrollFrame:SetVerticalScroll((value / 100) * maxScroll)
+    end
+  end)
+  
+  scrollFrame:SetScript("OnVerticalScroll", function()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    if maxScroll > 0 then
+      local current = scrollFrame:GetVerticalScroll()
+      scrollBar:SetValue((current / maxScroll) * 100)
+    else
+      scrollBar:SetValue(0)
+    end
+  end)
+  
+  panel.scrollFrame = scrollFrame
+  panel.scrollChild = scrollChild
+  panel.scrollBar = scrollBar
   panel.leaderEntries = {}
   panel.isWeekly = isWeekly
 end
@@ -2239,8 +2287,77 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
 end
 
 local function BuildRosterPanel(panel)
-  CreateScrollablePanel(panel, "Guild Roster", "Click on a member to view their card. Shows all members you've seen online.")
+  local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetText("|cFFFFD700Guild Roster|r")
   
+  local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  subtitle:SetPoint("TOP", h, "BOTTOM", 0, -3)
+  subtitle:SetText("|cFF888888Click a member to view their achievements and badges|r")
+  
+  local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
+  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -45)
+  scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 12)
+  scrollFrame:EnableMouse(true)
+  scrollFrame:EnableMouseWheel(true)
+  
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetWidth(500)
+  scrollChild:SetHeight(1)
+  scrollFrame:SetScrollChild(scrollChild)
+  
+  scrollFrame:SetScript("OnMouseWheel", function()
+    local current = scrollFrame:GetVerticalScroll()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    local newScroll = current - (arg1 * 40)
+    if newScroll < 0 then newScroll = 0 end
+    if newScroll > maxScroll then newScroll = maxScroll end
+    scrollFrame:SetVerticalScroll(newScroll)
+  end)
+  
+  local scrollBar = CreateFrame("Slider", nil, panel)
+  scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -45)
+  scrollBar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 12)
+  scrollBar:SetWidth(16)
+  scrollBar:SetOrientation("VERTICAL")
+  scrollBar:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
+  scrollBar:SetMinMaxValues(0, 100)
+  scrollBar:SetValue(0)
+  
+  local thumb = scrollBar:GetThumbTexture()
+  thumb:SetWidth(16)
+  thumb:SetHeight(24)
+  
+  scrollBar:SetBackdrop({
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 8, edgeSize = 8,
+    insets = {left = 2, right = 2, top = 2, bottom = 2}
+  })
+  scrollBar:SetBackdropColor(0, 0, 0, 0.3)
+  scrollBar:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+  
+  scrollBar:SetScript("OnValueChanged", function()
+    local value = scrollBar:GetValue()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    if maxScroll > 0 then
+      scrollFrame:SetVerticalScroll((value / 100) * maxScroll)
+    end
+  end)
+  
+  scrollFrame:SetScript("OnVerticalScroll", function()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    if maxScroll > 0 then
+      local current = scrollFrame:GetVerticalScroll()
+      scrollBar:SetValue((current / maxScroll) * 100)
+    else
+      scrollBar:SetValue(0)
+    end
+  end)
+  
+  panel.scrollFrame = scrollFrame
+  panel.scrollChild = scrollChild
+  panel.scrollBar = scrollBar
   panel.rosterButtons = {}
 end
 
@@ -2333,7 +2450,77 @@ function LeafVE.UI:RefreshRoster()
 end
 
 local function BuildHistoryPanel(panel)
-  CreateScrollablePanel(panel, "Point History", "Complete log of all your point transactions.")
+  local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetText("|cFFFFD700Point History|r")
+  
+  local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  subtitle:SetPoint("TOP", h, "BOTTOM", 0, -3)
+  subtitle:SetText("|cFF888888Complete log of all your point transactions|r")
+  
+  local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
+  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -45)
+  scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 12)
+  scrollFrame:EnableMouse(true)
+  scrollFrame:EnableMouseWheel(true)
+  
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetWidth(500)
+  scrollChild:SetHeight(1)
+  scrollFrame:SetScrollChild(scrollChild)
+  
+  scrollFrame:SetScript("OnMouseWheel", function()
+    local current = scrollFrame:GetVerticalScroll()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    local newScroll = current - (arg1 * 40)
+    if newScroll < 0 then newScroll = 0 end
+    if newScroll > maxScroll then newScroll = maxScroll end
+    scrollFrame:SetVerticalScroll(newScroll)
+  end)
+  
+  local scrollBar = CreateFrame("Slider", nil, panel)
+  scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -45)
+  scrollBar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 12)
+  scrollBar:SetWidth(16)
+  scrollBar:SetOrientation("VERTICAL")
+  scrollBar:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
+  scrollBar:SetMinMaxValues(0, 100)
+  scrollBar:SetValue(0)
+  
+  local thumb = scrollBar:GetThumbTexture()
+  thumb:SetWidth(16)
+  thumb:SetHeight(24)
+  
+  scrollBar:SetBackdrop({
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 8, edgeSize = 8,
+    insets = {left = 2, right = 2, top = 2, bottom = 2}
+  })
+  scrollBar:SetBackdropColor(0, 0, 0, 0.3)
+  scrollBar:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+  
+  scrollBar:SetScript("OnValueChanged", function()
+    local value = scrollBar:GetValue()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    if maxScroll > 0 then
+      scrollFrame:SetVerticalScroll((value / 100) * maxScroll)
+    end
+  end)
+  
+  scrollFrame:SetScript("OnVerticalScroll", function()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    if maxScroll > 0 then
+      local current = scrollFrame:GetVerticalScroll()
+      scrollBar:SetValue((current / maxScroll) * 100)
+    else
+      scrollBar:SetValue(0)
+    end
+  end)
+  
+  panel.scrollFrame = scrollFrame
+  panel.scrollChild = scrollChild
+  panel.scrollBar = scrollBar
   panel.historyEntries = {}
 end
 
@@ -2341,13 +2528,11 @@ local function BuildBadgesPanel(panel)
   -- Title
   local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   title:SetPoint("TOP", panel, "TOP", 0, -10)
-  title:SetText("Milestone Badges")
-  title:SetTextColor(THEME.gold[1], THEME.gold[2], THEME.gold[3])
+  title:SetText("|cFFFFD700Milestone Badges|r")
   
-  local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  subtitle:SetPoint("TOP", title, "BOTTOM", 0, -4)
-  subtitle:SetText("Earn badges by completing milestones and challenges!")
-  subtitle:SetTextColor(0.7, 0.7, 0.7)
+  local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  subtitle:SetPoint("TOP", title, "BOTTOM", 0, -3)
+  subtitle:SetText("|cFF888888Earn badges by completing milestones and challenges|r")
   
   -- Scroll frame
   local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
@@ -2404,7 +2589,77 @@ local function BuildBadgesPanel(panel)
 end
 
 local function BuildAchievementsPanel(panel)
-  CreateScrollablePanel(panel, "Achievement Leaderboard", "Top 20 guild members by achievement points.")
+  local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetText("|cFFFFD700Achievements|r")
+  
+  local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  subtitle:SetPoint("TOP", h, "BOTTOM", 0, -3)
+  subtitle:SetText("|cFF888888Complete challenges to earn achievement points and titles|r")
+  
+  local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
+  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -45)
+  scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 12)
+  scrollFrame:EnableMouse(true)
+  scrollFrame:EnableMouseWheel(true)
+  
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetWidth(500)
+  scrollChild:SetHeight(1)
+  scrollFrame:SetScrollChild(scrollChild)
+  
+  scrollFrame:SetScript("OnMouseWheel", function()
+    local current = scrollFrame:GetVerticalScroll()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    local newScroll = current - (arg1 * 40)
+    if newScroll < 0 then newScroll = 0 end
+    if newScroll > maxScroll then newScroll = maxScroll end
+    scrollFrame:SetVerticalScroll(newScroll)
+  end)
+  
+  local scrollBar = CreateFrame("Slider", nil, panel)
+  scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -45)
+  scrollBar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 12)
+  scrollBar:SetWidth(16)
+  scrollBar:SetOrientation("VERTICAL")
+  scrollBar:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
+  scrollBar:SetMinMaxValues(0, 100)
+  scrollBar:SetValue(0)
+  
+  local thumb = scrollBar:GetThumbTexture()
+  thumb:SetWidth(16)
+  thumb:SetHeight(24)
+  
+  scrollBar:SetBackdrop({
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 8, edgeSize = 8,
+    insets = {left = 2, right = 2, top = 2, bottom = 2}
+  })
+  scrollBar:SetBackdropColor(0, 0, 0, 0.3)
+  scrollBar:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+  
+  scrollBar:SetScript("OnValueChanged", function()
+    local value = scrollBar:GetValue()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    if maxScroll > 0 then
+      scrollFrame:SetVerticalScroll((value / 100) * maxScroll)
+    end
+  end)
+  
+  scrollFrame:SetScript("OnVerticalScroll", function()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    if maxScroll > 0 then
+      local current = scrollFrame:GetVerticalScroll()
+      scrollBar:SetValue((current / maxScroll) * 100)
+    else
+      scrollBar:SetValue(0)
+    end
+  end)
+  
+  panel.scrollFrame = scrollFrame
+  panel.scrollChild = scrollChild
+  panel.scrollBar = scrollBar
   panel.achEntries = {}
 end
 
@@ -2756,11 +3011,16 @@ function LeafVE.UI:RefreshAchievementsLeaderboard()
     for i = 1, maxShow do
       local leader = leaders[i]
       local frame = panel.achEntries[i]
-
       if not frame then
         frame = CreateFrame("Frame", nil, scrollChild)
         frame:SetWidth(480)
         frame:SetHeight(entryHeight)
+
+        local rankIcon = frame:CreateTexture(nil, "ARTWORK")
+        rankIcon:SetWidth(32)
+        rankIcon:SetHeight(32)
+        rankIcon:SetPoint("LEFT", frame, "LEFT", 5, 0)
+        frame.rankIcon = rankIcon
 
         local rank = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
         rank:SetPoint("LEFT", frame, "LEFT", 5, 0)
@@ -2769,7 +3029,7 @@ function LeafVE.UI:RefreshAchievementsLeaderboard()
         frame.rank = rank
 
         local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        nameText:SetPoint("LEFT", rank, "RIGHT", 15, 0)
+        nameText:SetPoint("LEFT", rank, "RIGHT", 40, 0)
         nameText:SetWidth(200)
         nameText:SetJustifyH("LEFT")
         frame.nameText = nameText
@@ -2791,8 +3051,24 @@ function LeafVE.UI:RefreshAchievementsLeaderboard()
 
       frame:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 5, yOffset)
 
-      frame.rank:SetText("#"..i)
-      frame.rank:SetTextColor(1, 1, 1)
+      -- Show PVP rank icons for top 3, numbers for rest
+      if i <= 3 and PVP_RANK_ICONS[i] then
+        frame.rankIcon:SetTexture(PVP_RANK_ICONS[i])
+        if frame.rankIcon:GetTexture() then
+          frame.rankIcon:Show()
+          frame.rank:Hide()
+        else
+          frame.rankIcon:Hide()
+          frame.rank:Show()
+          frame.rank:SetText("#"..i)
+          frame.rank:SetTextColor(1, 1, 1)
+        end
+      else
+        frame.rankIcon:Hide()
+        frame.rank:Show()
+        frame.rank:SetText("#"..i)
+        frame.rank:SetTextColor(1, 1, 1)
+      end
 
       local class = string.upper(leader.class or "UNKNOWN")
       local classColor = CLASS_COLORS[class] or {1, 1, 1}
