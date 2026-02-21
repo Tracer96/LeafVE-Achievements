@@ -281,6 +281,9 @@ local function EnsureDB()
   if not LeafVE_DB.loginStreaks then LeafVE_DB.loginStreaks = {} end
   if not LeafVE_DB.persistentRoster then LeafVE_DB.persistentRoster = {} end
   if not LeafVE_DB.lboard then LeafVE_DB.lboard = { alltime = {}, weekly = {}, updatedAt = {} } end
+  if not LeafVE_DB.lboard.alltime then LeafVE_DB.lboard.alltime = {} end
+  if not LeafVE_DB.lboard.weekly then LeafVE_DB.lboard.weekly = {} end
+  if not LeafVE_DB.lboard.updatedAt then LeafVE_DB.lboard.updatedAt = {} end
   if LeafVE_DB.ui.w == nil then LeafVE_DB.ui.w = 950 end
   if LeafVE_DB.ui.h == nil then LeafVE_DB.ui.h = 660 end
   if LeafVE_DB.options.officerRankThreshold == nil then LeafVE_DB.options.officerRankThreshold = 4 end
@@ -1028,6 +1031,13 @@ end
   local G = tonumber(string.sub(rest3, 1, colonPos4 - 1)) or 0
   local S = tonumber(string.sub(rest3, colonPos4 + 1)) or 0
   
+  -- Defensive: reset any non-table updatedAt entries (e.g. legacy number timestamps from older versions)
+  local existingUA = LeafVE_DB.lboard.updatedAt[playerName]
+  if existingUA ~= nil and type(existingUA) ~= "table" then
+    Print("LeafVE: Resetting malformed leaderboard updatedAt for "..tostring(playerName))
+    LeafVE_DB.lboard.updatedAt[playerName] = nil
+  end
+
   -- Store into dedicated lboard tables (never overwrite local accounting)
   local now = Now()
   if dataType == "L" then
