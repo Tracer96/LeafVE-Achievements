@@ -2295,8 +2295,63 @@ local function BuildRosterPanel(panel)
   subtitle:SetPoint("TOP", h, "BOTTOM", 0, -3)
   subtitle:SetText("|cFF888888Click a member to view their achievements and badges|r")
   
+  -- SEARCH BAR
+  local searchLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  searchLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -45)
+  searchLabel:SetText("Search:")
+  
+  local searchBox = CreateFrame("EditBox", nil, panel)
+  searchBox:SetPoint("LEFT", searchLabel, "RIGHT", 5, 0)
+  searchBox:SetWidth(200)
+  searchBox:SetHeight(20)
+  searchBox:SetAutoFocus(false)
+  searchBox:SetFontObject(GameFontHighlight)
+  searchBox:SetMaxLetters(50)
+  
+  local searchBG = CreateFrame("Frame", nil, panel)
+  searchBG:SetPoint("TOPLEFT", searchBox, "TOPLEFT", -5, 5)
+  searchBG:SetPoint("BOTTOMRIGHT", searchBox, "BOTTOMRIGHT", 5, -5)
+  searchBG:SetBackdrop({
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 16, edgeSize = 12,
+    insets = {left = 3, right = 3, top = 3, bottom = 3}
+  })
+  searchBG:SetBackdropColor(0, 0, 0, 0.5)
+  searchBG:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+  searchBG:SetFrameLevel(searchBox:GetFrameLevel() - 1)
+  
+  searchBox:SetScript("OnEscapePressed", function() 
+    this:ClearFocus() 
+  end)
+  
+  searchBox:SetScript("OnTextChanged", function()
+    if LeafVE.UI and LeafVE.UI.RefreshRoster then
+      LeafVE.UI:RefreshRoster()
+    end
+  end)
+  
+  panel.searchBox = searchBox
+  
+  -- Clear button
+  local clearBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+  clearBtn:SetPoint("LEFT", searchBox, "RIGHT", 5, 0)
+  clearBtn:SetWidth(50)
+  clearBtn:SetHeight(20)
+  clearBtn:SetText("Clear")
+  SkinButtonAccent(clearBtn)
+  
+  clearBtn:SetScript("OnClick", function()
+    panel.searchBox:SetText("")
+    panel.searchBox:ClearFocus()
+    if LeafVE.UI and LeafVE.UI.RefreshRoster then
+      LeafVE.UI:RefreshRoster()
+    end
+  end)
+  
+  -- SCROLL FRAME (moved down for search bar)
   local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
-  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -45)
+  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -75)
   scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 12)
   scrollFrame:EnableMouse(true)
   scrollFrame:EnableMouseWheel(true)
@@ -2316,7 +2371,7 @@ local function BuildRosterPanel(panel)
   end)
   
   local scrollBar = CreateFrame("Slider", nil, panel)
-  scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -45)
+  scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -75)
   scrollBar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 12)
   scrollBar:SetWidth(16)
   scrollBar:SetOrientation("VERTICAL")
@@ -2367,9 +2422,18 @@ function LeafVE.UI:RefreshRoster()
   EnsureDB()
   LeafVE:UpdateGuildRosterCache()
   
+  -- GET SEARCH TEXT
+  local searchText = ""
+  if self.panels.roster.searchBox then
+    searchText = Lower(Trim(self.panels.roster.searchBox:GetText() or ""))
+  end
+  
   local members = {}
   for _, info in pairs(LeafVE.guildRosterCache) do
-    table.insert(members, info)
+    -- FILTER BY SEARCH TEXT
+    if searchText == "" or string.find(Lower(info.name), searchText, 1, true) then
+      table.insert(members, info)
+    end
   end
   
   table.sort(members, function(a, b)
