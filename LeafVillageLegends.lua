@@ -859,10 +859,6 @@ function LeafVE:BroadcastPlayerNote(noteText)
 end
 
 function LeafVE:OnAddonMessage(prefix, message, channel, sender)
-  -- ... existing code ...
-end
-
-function LeafVE:OnAddonMessage(prefix, message, channel, sender)
   if prefix ~= "LeafVE" then return end
   if channel ~= "GUILD" then return end
   
@@ -938,6 +934,7 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
     end
   end
 end
+  
 function FindUnitToken(playerName)
   if UnitName("player") == playerName then return "player" end
   if UnitExists("target") and UnitName("target") == playerName then return "target" end
