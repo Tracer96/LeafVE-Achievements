@@ -1244,8 +1244,9 @@ function LeafVE.UI:ShowAllBadgesPanel(playerName)
   -- Create main frame
   if not self.allBadgesFrame then
     local f = CreateFrame("Frame", "LeafVEAllBadgesFrame", UIParent)
-    SetSize(f, 700, 550)
-    f:SetPoint("anchorPoint", parentFrame, "relativePoint", xOffset, yOffset)
+    f:SetWidth(700)
+    f:SetHeight(550)
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     f:SetFrameStrata("DIALOG")
     f:EnableMouse(true)
     f:SetMovable(true)
@@ -1289,31 +1290,38 @@ function LeafVE.UI:ShowAllBadgesPanel(playerName)
   end
   f.badgeIcons = {}
   
-  -- Get player's badges
-  local profile = self:GetProfileForPlayer(playerName)
-  local playerBadges = {}
-  if profile and profile.badges then
-    for _, badge in ipairs(profile.badges) do
-      playerBadges[badge.id] = badge
-    end
+-- Get player's badges
+EnsureDB()
+local shortName = ShortName(playerName)
+local playerBadges = {}
+if shortName and LeafVE_DB.badges[shortName] then
+  for badgeId, timestamp in pairs(LeafVE_DB.badges[shortName]) do
+    playerBadges[badgeId] = {
+      id = badgeId,
+      earned = timestamp
+    }
+  end
+end
+  
+-- Organize badges by category
+local categories = {}
+for i = 1, table.getn(BADGES) do
+  local badge = BADGES[i]
+  local category = badge.category or "Other"
+  
+  if not categories[category] then
+    categories[category] = {}
   end
   
-  -- Organize badges by category
-  local categories = {}
-  for id, badge in pairs(LeafVE.Badges) do
-    local category = badge.category or "Other"
-    if not categories[category] then
-      categories[category] = {}
-    end
-    table.insert(categories[category], {
-      id = id,
-      name = badge.name,
-      description = badge.description,
-      icon = badge.icon,
-      earned = playerBadges[id] ~= nil,
-      earnedDate = playerBadges[id] and playerBadges[id].earned or nil
-    })
-  end
+  table.insert(categories[category], {
+    id = badge.id,
+    name = badge.name,
+    description = badge.desc,
+    icon = badge.icon,
+    earned = playerBadges[badge.id] ~= nil,
+    earnedDate = playerBadges[badge.id] and playerBadges[badge.id].earned or nil
+  })
+end
   
   -- Sort categories
   local sortedCategories = {}
@@ -1351,7 +1359,8 @@ function LeafVE.UI:ShowAllBadgesPanel(playerName)
     
     for _, badgeData in ipairs(categories[category]) do
       local icon = CreateFrame("Frame", nil, content)
-      icon:SetSize(iconSize, iconSize)
+      icon:SetWidth(iconSize)
+      icon:SetHeight(iconSize)
       icon:SetPoint("TOPLEFT", content, "TOPLEFT", xOffset, yOffset)
       
       -- Badge texture
@@ -1370,23 +1379,24 @@ function LeafVE.UI:ShowAllBadgesPanel(playerName)
       border:SetTexture("Interface\\AchievementFrame\\UI-Achievement-IconFrame")
       border:SetTexCoord(0, 0.5625, 0, 0.5625)
       
-      -- Tooltip
-      icon:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(badgeData.name, 1, 1, 1)
-        GameTooltip:AddLine(badgeData.description, nil, nil, nil, true)
-        if badgeData.earned and badgeData.earnedDate then
-          GameTooltip:AddLine(" ", 1, 1, 1)
-          GameTooltip:AddLine("Earned: " .. date("%m/%d/%Y", badgeData.earnedDate), 0.5, 0.5, 0.5)
-        elseif not badgeData.earned then
-          GameTooltip:AddLine(" ", 1, 1, 1)
-          GameTooltip:AddLine("Not yet earned", 0.5, 0.5, 0.5)
-        end
-        GameTooltip:Show()
-      end)
-      icon:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-      end)
+      --- Tooltip
+icon:SetScript("OnEnter", function()
+  GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+  GameTooltip:SetText(this.badgeName, 1, 1, 1)
+  GameTooltip:AddLine(this.badgeDesc, nil, nil, nil, true)
+  if this.earned and this.earnedDate then
+    GameTooltip:AddLine(" ", 1, 1, 1)
+    GameTooltip:AddLine("Earned: " .. date("%m/%d/%Y", this.earnedDate), 0.5, 0.5, 0.5)
+  elseif not this.earned then
+    GameTooltip:AddLine(" ", 1, 1, 1)
+    GameTooltip:AddLine("Not yet earned", 0.5, 0.5, 0.5)
+  end
+  GameTooltip:Show()
+end)
+
+icon:SetScript("OnLeave", function()
+  GameTooltip:Hide()
+end)
       
       table.insert(f.badgeIcons, icon)
       
