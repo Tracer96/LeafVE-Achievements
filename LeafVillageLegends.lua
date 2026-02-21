@@ -3761,6 +3761,7 @@ function LeafVE.UI:RefreshBadges()
     panel.scrollBar:SetValue(0)
     updateFrame:SetScript("OnUpdate", nil)
   end)
+end
 
 function LeafVE.UI:RefreshAchievementsLeaderboard()
   if not self.panels or not self.panels.achievements then return end
