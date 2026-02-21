@@ -1169,17 +1169,24 @@ self.cardRecentBadgesFrame = recentBadgesFrame
 
 self.cardRecentBadgeFrames = {}
 
-  -- View All Badges Button
-  local viewAllBadgesBtn = CreateFrame("Button", nil, c, "UIPanelButtonTemplate")
-  viewAllBadgesBtn:SetWidth(140)
-  viewAllBadgesBtn:SetHeight(22)
-  viewAllBadgesBtn:SetPoint("TOPLEFT", recentBadgesFrame, "BOTTOMLEFT", 0, 10)
-  viewAllBadgesBtn:SetText("View All Badges")
-  SkinButtonAccent(viewAllBadgesBtn)
-  viewAllBadgesBtn:SetScript("OnClick", function()
+-- View All Badges Button
+local viewAllBadgesBtn = CreateFrame("Button", nil, c, "UIPanelButtonTemplate")
+viewAllBadgesBtn:SetWidth(140)
+viewAllBadgesBtn:SetHeight(22)
+viewAllBadgesBtn:SetPoint("TOPLEFT", recentBadgesFrame, "BOTTOMLEFT", 0, 10)
+viewAllBadgesBtn:SetText("View All Badges")
+SkinButtonAccent(viewAllBadgesBtn)
+viewAllBadgesBtn:SetScript("OnClick", function()
+  if LeafVE.UI.allBadgesFrame and LeafVE.UI.allBadgesFrame:IsVisible() then
+    LeafVE.UI.allBadgesFrame:Hide()
+  else
     LeafVE.UI:ShowAllBadgesPanel(LeafVE.UI.inspectedPlayer or UnitName("player"))
-  end)
-  self.viewAllBadgesBtn = viewAllBadgesBtn
+    if LeafVE.UI.allBadgesFrame then
+      LeafVE.UI.allBadgesFrame:Show()
+    end
+  end
+end)
+self.viewAllBadgesBtn = viewAllBadgesBtn
 
   -- Achievements Section
   local achLabel = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1324,32 +1331,26 @@ leafEmblem:SetPoint("CENTER", c, "CENTER", 0, -125)  -- Same position
   leafLabel:SetTextColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3])
  end
 
--- Show All Badges Panel
 function LeafVE.UI:ShowAllBadgesPanel(playerName)
   if not playerName then
     playerName = UnitName("player")
   end
 
-  -- Create main frame
-if LeafVE.UI.frame then
-  f:SetHeight(LeafVE.UI.frame:GetHeight())
-else
-  f:SetHeight(550)
-end
-  
-  -- Anchor to right side of main UI panel
-  if LeafVE.UI.frame then
-    f:SetPoint("TOPLEFT", LeafVE.UI.frame, "TOPRIGHT", 5, 0)
-  else
-    f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)  -- Fallback if main UI not open
-  end
+  -- Create main frame (only once)
+  if not self.allBadgesFrame then
+    local f = CreateFrame("Frame", "LeafVEAllBadgesFrame", UIParent)
+    f:SetWidth(450)
     f:SetFrameStrata("DIALOG")
     f:EnableMouse(true)
-    f:SetMovable(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function() this:StartMoving() end)
-    f:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
-    f:SetClampedToScreen(true)
+    
+    -- Anchor to right side of main UI panel
+    if LeafVE.UI.frame then
+      f:SetPoint("TOPLEFT", LeafVE.UI.frame, "TOPRIGHT", 5, 0)
+      f:SetHeight(LeafVE.UI.frame:GetHeight())
+    else
+      f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+      f:SetHeight(550)
+    end
     
     -- Backdrop
     f:SetBackdrop({
@@ -1365,6 +1366,7 @@ end
     -- Title
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     f.title:SetPoint("TOP", f, "TOP", 0, -15)
+    f.title:SetTextColor(THEME.gold[1], THEME.gold[2], THEME.gold[3])
     
     -- Close button
     local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
@@ -1377,8 +1379,8 @@ end
     scrollFrame:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -30, 20)
     
     -- Content Frame
-local content = CreateFrame("Frame", nil, scrollFrame)
-content:SetWidth(400)  -- Fixed width for consistency
+    local content = CreateFrame("Frame", nil, scrollFrame)
+    content:SetWidth(400)
     content:SetHeight(1)
     scrollFrame:SetScrollChild(content)
     
@@ -1387,18 +1389,24 @@ content:SetWidth(400)  -- Fixed width for consistency
     
     self.allBadgesFrame = f
   end
+local f = self.allBadgesFrame
+f.title:SetText(playerName .. "'s Badge Collection")
 
-  local f = self.allBadgesFrame
-  f.title:SetText(playerName .. "'s Badge Collection")
-  
-  -- Clear existing content
-  if f.badgeIcons then
-    for _, icon in ipairs(f.badgeIcons) do
-      icon:Hide()
-      icon:SetParent(nil)
-    end
-  end
-  f.badgeIcons = {}
+-- Destroy and recreate content frame to force refresh
+if f.content then
+  f.content:Hide()
+  f.content:SetParent(nil)
+  f.content = nil
+end
+
+-- Create fresh content frame
+local content = CreateFrame("Frame", nil, f.scrollFrame)
+content:SetWidth(400)
+content:SetHeight(1)
+f.scrollFrame:SetScrollChild(content)
+f.content = content
+
+f.badgeIcons = {}
   
 -- Get player's badges
 EnsureDB()
@@ -1412,6 +1420,15 @@ if shortName and LeafVE_DB.badges[shortName] then
     }
   end
 end
+
+-- DEBUG: Print what we found
+DEFAULT_CHAT_FRAME:AddMessage("Showing badges for: " .. playerName)
+DEFAULT_CHAT_FRAME:AddMessage("Short name: " .. tostring(shortName))
+local count = 0
+for k, v in pairs(playerBadges) do
+  count = count + 1
+end
+DEFAULT_CHAT_FRAME:AddMessage("Found " .. count .. " earned badges")
   
 -- Organize badges by category
 local categories = {}
