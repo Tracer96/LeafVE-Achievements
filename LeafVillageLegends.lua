@@ -144,8 +144,17 @@ local function WeekStartTS(ts)
   d.hour, d.min, d.sec = 0, 0, 0
   local midnight = time(d)
   local wday = d.wday or 1
-  local fromMon = (wday == 1) and 6 or (wday - 2)
-  return midnight - fromMon * SECONDS_PER_DAY
+  
+  -- Calculate days since last Tuesday (wday 3 = Tuesday)
+  -- Sunday=1, Monday=2, Tuesday=3, Wednesday=4, etc.
+  local daysSinceTuesday
+  if wday >= 3 then
+    daysSinceTuesday = wday - 3  -- Wed=1, Thu=2, Fri=3, Sat=4, Sun=5, Mon=6
+  else
+    daysSinceTuesday = wday + 4  -- Sun=5, Mon=6
+  end
+  
+  return midnight - daysSinceTuesday * SECONDS_PER_DAY
 end
 
 local function GetWeekDateRange()
@@ -1172,13 +1181,21 @@ end)
   
   self.cardSaveNoteBtn = saveNoteBtn
 
-  -- Leaf Village Emblem
+  -- Leaf Village Emblem with BIG BRIGHT GLOW
+  local leafGlow = c:CreateTexture(nil, "BACKGROUND")
+  leafGlow:SetWidth(128)  -- ← DOUBLED from 64
+  leafGlow:SetHeight(128)
+  leafGlow:SetPoint("CENTER", c, "CENTER", 0, -50)
+  leafGlow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+  leafGlow:SetVertexColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3], 1.0)  -- ← FULL BRIGHTNESS (was 0.6)
+  leafGlow:SetBlendMode("ADD")
+  
   local leafEmblem = c:CreateTexture(nil, "ARTWORK")
-  leafEmblem:SetWidth(32)
-  leafEmblem:SetHeight(32)
+  leafEmblem:SetWidth(48)  -- ← BIGGER (was 32)
+  leafEmblem:SetHeight(48)
   leafEmblem:SetPoint("CENTER", c, "CENTER", 0, -50)
   leafEmblem:SetTexture("Interface\\Icons\\INV_Misc_Herb_8")
-  leafEmblem:SetVertexColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3], 0.8)
+  leafEmblem:SetVertexColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3], 1.0)
 
   local leafLabel = c:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   leafLabel:SetPoint("TOP", leafEmblem, "BOTTOM", 0, -2)
@@ -1244,7 +1261,8 @@ function LeafVE.UI:UpdateCardRecentBadges(playerName)
         name = badge.name,
         desc = badge.desc,
         icon = badge.icon,
-        earnedAt = myBadges[badge.id]
+        earnedAt = myBadges[badge.id],
+        earned = true
       })
     end
   end
@@ -1256,18 +1274,51 @@ function LeafVE.UI:UpdateCardRecentBadges(playerName)
     return a.earnedAt > b.earnedAt
   end)
   
-  -- Display up to 6 most recent badges (2 rows of 3)
-  local maxDisplay = 6
+  -- Take top 9 earned badges
+  local topEarned = {}
+  for i = 1, math.min(9, table.getn(earnedBadges)) do
+    table.insert(topEarned, earnedBadges[i])
+  end
+  
+  -- Fill remaining slots with locked badges (not yet earned)
+  if table.getn(topEarned) < 9 then
+    for i = 1, table.getn(BADGES) do
+      if table.getn(topEarned) >= 9 then break end
+      
+      local badge = BADGES[i]
+      local alreadyShown = false
+      
+      for j = 1, table.getn(topEarned) do
+        if topEarned[j].id == badge.id then
+          alreadyShown = true
+          break
+        end
+      end
+      
+      if not alreadyShown then
+        table.insert(topEarned, {
+          id = badge.id,
+          name = badge.name,
+          desc = badge.desc,
+          icon = badge.icon,
+          earnedAt = nil,
+          earned = false
+        })
+      end
+    end
+  end
+  
+  -- Display all 9 badges (earned + locked)
   local badgeSize = 45
   local xSpacing = 50
   local ySpacing = 50
   local perRow = 3
   
-  for i = 1, math.min(maxDisplay, table.getn(earnedBadges)) do
-    local badge = earnedBadges[i]
+  for i = 1, 9 do  -- ← CHANGE FROM 6 TO 9
+    local badge = topEarned[i]
     local frame = self.cardRecentBadgeFrames[i]
     
-    Print("Creating/updating badge "..i..": "..badge.name)
+    Print("Creating/updating badge "..i..": "..(badge and badge.name or "empty slot"))
     
     if not frame then
       Print("Creating NEW frame for badge "..i)
@@ -1292,46 +1343,74 @@ function LeafVE.UI:UpdateCardRecentBadges(playerName)
     
     Print("Positioned at col="..col.." row="..row)
     
-    -- Set icon
-    frame.icon:SetTexture(badge.icon)
-    if not frame.icon:GetTexture() then
-      frame.icon:SetTexture(LEAF_FALLBACK)
+    if badge then
+      -- Set icon
+      frame.icon:SetTexture(badge.icon)
+      if not frame.icon:GetTexture() then
+        frame.icon:SetTexture(LEAF_FALLBACK)
+      end
+      
+      -- Style: earned = full color, locked = greyed out
+      if badge.earned then
+        frame.icon:SetVertexColor(1, 1, 1, 1)
+        frame.icon:SetDesaturated(nil)
+      else
+        frame.icon:SetVertexColor(0.4, 0.4, 0.4, 0.7)
+        if frame.icon.SetDesaturated then
+          frame.icon:SetDesaturated(true)
+        end
+      end
+      
+      -- Tooltip
+      frame:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        
+        if badge.earned then
+          GameTooltip:SetText(badge.name, THEME.gold[1], THEME.gold[2], THEME.gold[3], 1, true)
+          GameTooltip:AddLine(badge.desc, 1, 1, 1, true)
+          GameTooltip:AddLine(" ", 1, 1, 1)
+          GameTooltip:AddLine("Earned: "..date("%m/%d/%Y", badge.earnedAt), 0.5, 0.8, 0.5)
+        else
+          GameTooltip:SetText(badge.name, 0.6, 0.6, 0.6, 1, true)
+          GameTooltip:AddLine(badge.desc, 0.7, 0.7, 0.7, true)
+          GameTooltip:AddLine(" ", 1, 1, 1)
+          GameTooltip:AddLine("Not yet earned", 0.8, 0.4, 0.4)
+        end
+        
+        GameTooltip:Show()
+      end)
+      
+      frame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+      end)
+    else
+      -- Empty slot
+      frame.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+      frame.icon:SetVertexColor(0.3, 0.3, 0.3, 0.5)
+      if frame.icon.SetDesaturated then
+        frame.icon:SetDesaturated(true)
+      end
+      
+      frame:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        GameTooltip:SetText("Empty Badge Slot", 0.5, 0.5, 0.5, 1, true)
+        GameTooltip:Show()
+      end)
+      
+      frame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+      end)
     end
-    frame.icon:SetVertexColor(1, 1, 1, 1)
-    
-    -- Tooltip
-    frame:SetScript("OnEnter", function()
-      GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-      GameTooltip:ClearLines()
-      GameTooltip:SetText(badge.name, THEME.gold[1], THEME.gold[2], THEME.gold[3], 1, true)
-      GameTooltip:AddLine(badge.desc, 1, 1, 1, true)
-      GameTooltip:AddLine(" ", 1, 1, 1)
-      GameTooltip:AddLine("Earned: "..date("%m/%d/%Y", badge.earnedAt), 0.5, 0.8, 0.5)
-      GameTooltip:Show()
-    end)
-    
-    frame:SetScript("OnLeave", function()
-      GameTooltip:Hide()
-    end)
     
     frame:Show()
     Print("Badge "..i.." frame shown")
   end
   
-  -- If no badges earned, show message
-  if table.getn(earnedBadges) == 0 then
-    Print("No badges earned - showing message")
-    if not self.cardNoBadgesText then
-      local text = self.cardRecentBadgesFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-      text:SetPoint("TOP", self.cardRecentBadgesFrame, "TOP", 0, -20)
-      text:SetText("|cFF888888No badges earned yet|r")
-      self.cardNoBadgesText = text
-    end
-    self.cardNoBadgesText:Show()
-  else
-    if self.cardNoBadgesText then
-      self.cardNoBadgesText:Hide()
-    end
+  -- Hide "No badges" text
+  if self.cardNoBadgesText then
+    self.cardNoBadgesText:Hide()
   end
   
   Print("UpdateCardRecentBadges complete")
@@ -1866,7 +1945,48 @@ local function BuildMyPanel(panel)
   alltimeStats:SetText("")
   panel.alltimeStats = alltimeStats
   
-  local legend = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  -- Section Divider (now anchored to alltimeStats)
+  local divider = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  divider:SetPoint("TOPLEFT", alltimeStats, "BOTTOMLEFT", 0, -20)
+  divider:SetText("|cFFFFD700▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬|r")
+  
+  -- Last Week's Winner (styled like other stats)
+  local lastWeekLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  lastWeekLabel:SetPoint("TOPLEFT", divider, "BOTTOMLEFT", 0, -15)
+  lastWeekLabel:SetText("|cFF2DD35CLast Week's Winner|r")
+  
+  local lastWeekWinner = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  lastWeekWinner:SetPoint("TOPLEFT", lastWeekLabel, "BOTTOMLEFT", 0, -5)
+  lastWeekWinner:SetWidth(maxWidth)
+  lastWeekWinner:SetJustifyH("LEFT")
+  lastWeekWinner:SetText("Loading...")
+  panel.lastWeekWinner = lastWeekWinner
+  
+  -- All-Time Leader (styled like other stats)
+  local alltimeLeaderLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  alltimeLeaderLabel:SetPoint("TOPLEFT", lastWeekWinner, "BOTTOMLEFT", 0, -15)
+  alltimeLeaderLabel:SetText("|cFF2DD35CAll-Time Leader|r")
+  
+  local alltimeLeader = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  alltimeLeader:SetPoint("TOPLEFT", alltimeLeaderLabel, "BOTTOMLEFT", 0, -5)
+  alltimeLeader:SetWidth(maxWidth)
+  alltimeLeader:SetJustifyH("LEFT")
+  alltimeLeader:SetText("Loading...")
+  panel.alltimeLeader = alltimeLeader
+  
+  -- Week Countdown (styled like other stats) - MOVE TO RIGHT SIDE
+  local weekCountdownLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  weekCountdownLabel:SetPoint("TOPLEFT", divider, "BOTTOMLEFT", 250, -15)  -- ← 250 pixels to the right
+  weekCountdownLabel:SetText("|cFF2DD35CWeek Resets In|r")
+  
+  local weekCountdown = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  weekCountdown:SetPoint("TOPLEFT", weekCountdownLabel, "BOTTOMLEFT", 0, -5)
+  weekCountdown:SetWidth(maxWidth)
+  weekCountdown:SetJustifyH("LEFT")
+  weekCountdown:SetText("Loading...")
+  panel.weekCountdown = weekCountdown
+  
+local legend = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   legend:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12, 12)
   legend:SetWidth(maxWidth)
   legend:SetJustifyH("LEFT")
@@ -3168,13 +3288,13 @@ function LeafVE.UI:Build()
   self.frame = f
   f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   
-local w = LeafVE_DB.ui.w or 1050
-local h = LeafVE_DB.ui.h or 500  -- ← POSITIVE number (default height)
-
-if w < 950 then w = 950 end
-if w > 1400 then w = 1400 end
-if h < 500 then h = 500 end  
-if h > 1000 then h = 1000 end 
+  local w = LeafVE_DB.ui.w or 1050
+  local h = LeafVE_DB.ui.h or 699  -- ← CHANGED TO 699
+  
+  if w < 950 then w = 950 end
+  if w > 1400 then w = 1400 end
+  if h < 600 then h = 600 end  
+  if h > 1000 then h = 1000 end
   
   f:SetWidth(w)
   f:SetHeight(h)
@@ -3427,7 +3547,78 @@ function LeafVE.UI:Refresh()
         alltimeT.L or 0, alltimeT.G or 0, alltimeT.S or 0, (alltimeT.L or 0) + (alltimeT.G or 0) + (alltimeT.S or 0)
       ))
     end
+  
+    -- Calculate Last Week's Winner
+    if self.panels.me.lastWeekWinner then
+      local lastWeekStart = WeekStartTS(Now()) - (7 * SECONDS_PER_DAY)
+      local lastWeekAgg = {}
+      
+      for d = 0, 6 do
+        local dk = DayKeyFromTS(lastWeekStart + d * SECONDS_PER_DAY)
+        if LeafVE_DB.global[dk] then
+          for name, t in pairs(LeafVE_DB.global[dk]) do
+            if not lastWeekAgg[name] then lastWeekAgg[name] = {L = 0, G = 0, S = 0} end
+            lastWeekAgg[name].L = lastWeekAgg[name].L + (t.L or 0)
+            lastWeekAgg[name].G = lastWeekAgg[name].G + (t.G or 0)
+            lastWeekAgg[name].S = lastWeekAgg[name].S + (t.S or 0)
+          end
+        end
+      end
+      
+      local winner = nil
+      local maxPoints = 0
+      for name, pts in pairs(lastWeekAgg) do
+        local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
+        if total > maxPoints then
+          maxPoints = total
+          winner = name
+        end
+      end
+      
+    if winner then
+      self.panels.me.lastWeekWinner:SetText(string.format("%s with |cFFFFD700%d points|r", winner, maxPoints))
+    else
+      self.panels.me.lastWeekWinner:SetText("|cFF888888No data available|r")
+    end
+   end
     
+    -- Calculate All-Time Leader
+    if self.panels.me.alltimeLeader then
+      local leader = nil
+      local maxPoints = 0
+      
+      for name, pts in pairs(LeafVE_DB.alltime) do
+        local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
+        if total > maxPoints then
+          maxPoints = total
+          leader = name
+        end
+      end
+      
+    if leader then
+      self.panels.me.alltimeLeader:SetText(string.format("%s with |cFFFFD700%d points|r", leader, maxPoints))
+    else
+      self.panels.me.alltimeLeader:SetText("|cFF888888No data available|r")
+    end
+   end
+  
+    -- Calculate Week Countdown
+    if self.panels.me.weekCountdown then
+      local weekStart = WeekStartTS(Now())
+      local weekEnd = weekStart + (7 * SECONDS_PER_DAY)
+      local timeLeft = weekEnd - Now()
+      
+    if timeLeft > 0 then
+      local days = math.floor(timeLeft / SECONDS_PER_DAY)
+      local hours = math.floor((timeLeft - (days * SECONDS_PER_DAY)) / SECONDS_PER_HOUR)
+      local minutes = math.floor((timeLeft - (days * SECONDS_PER_DAY) - (hours * SECONDS_PER_HOUR)) / 60)
+      
+      self.panels.me.weekCountdown:SetText(string.format("|cFFFFD700%dd %dh %dm|r", days, hours, minutes))
+    else
+      self.panels.me.weekCountdown:SetText("|cFFFF0000Resetting now!|r")
+    end
+   end
+
   elseif self.activeTab == "shoutouts" and self.panels.shoutouts then
     self.panels.shoutouts:Show()
     local me = ShortName(UnitName("player"))
