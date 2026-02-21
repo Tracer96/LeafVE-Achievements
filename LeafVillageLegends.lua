@@ -2391,10 +2391,28 @@ end
 local function BuildMyPanel(panel)
   local maxWidth = 500
   
+  -- Block header background
+  local headerBG = panel:CreateTexture(nil, "BACKGROUND")
+  headerBG:SetPoint("TOP", panel, "TOP", -15, -10)
+  headerBG:SetWidth(420)  -- ← NARROWER (was 500)
+  headerBG:SetHeight(50)
+  headerBG:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  headerBG:SetVertexColor(0.15, 0.15, 0.18, 0.9)
+  
+  -- Top accent stripe
+  local accentTop = panel:CreateTexture(nil, "BORDER")
+  accentTop:SetPoint("TOPLEFT", headerBG, "TOPLEFT", 0, 0)
+  accentTop:SetPoint("TOPRIGHT", headerBG, "TOPRIGHT", 0, 0)
+  accentTop:SetHeight(3)
+  accentTop:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  accentTop:SetVertexColor(THEME.gold[1], THEME.gold[2], THEME.gold[3], 1)
+  
+  -- Title
   local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetPoint("TOP", headerBG, "TOP", 0, -10)
   h:SetText("|cFFFFD700My Stats|r")
 
+  -- Subtitle
   local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   subtitle:SetPoint("TOP", h, "BOTTOM", 0, -3)
   subtitle:SetText("|cFF888888View your contribution statistics|r")
@@ -2492,8 +2510,24 @@ local legend = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 end
 
 local function BuildShoutoutsPanel(panel)
+  -- Block header background
+  local headerBG = panel:CreateTexture(nil, "BACKGROUND")
+  headerBG:SetPoint("TOP", panel, "TOP", -15, -10)
+  headerBG:SetWidth(420)
+  headerBG:SetHeight(50)
+  headerBG:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  headerBG:SetVertexColor(0.15, 0.15, 0.18, 0.9)
+  
+  -- Top accent stripe
+  local accentTop = panel:CreateTexture(nil, "BORDER")
+  accentTop:SetPoint("TOPLEFT", headerBG, "TOPLEFT", 0, 0)
+  accentTop:SetPoint("TOPRIGHT", headerBG, "TOPRIGHT", 0, 0)
+  accentTop:SetHeight(3)
+  accentTop:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  accentTop:SetVertexColor(THEME.gold[1], THEME.gold[2], THEME.gold[3], 1)
+  
   local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetPoint("TOP", headerBG, "TOP", 0, -10)
   h:SetText("|cFFFFD700Shoutouts|r")
 
   local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -2672,8 +2706,24 @@ local function CreateScrollablePanel(panel, title, desc)
 end
 
 local function BuildLeaderboardPanel(panel, isWeekly)
+  -- Block header background
+  local headerBG = panel:CreateTexture(nil, "BACKGROUND")
+  headerBG:SetPoint("TOP", panel, "TOP", -15, -10)
+  headerBG:SetWidth(420)
+  headerBG:SetHeight(50)
+  headerBG:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  headerBG:SetVertexColor(0.15, 0.15, 0.18, 0.9)
+  
+  -- Top accent stripe
+  local accentTop = panel:CreateTexture(nil, "BORDER")
+  accentTop:SetPoint("TOPLEFT", headerBG, "TOPLEFT", 0, 0)
+  accentTop:SetPoint("TOPRIGHT", headerBG, "TOPRIGHT", 0, 0)
+  accentTop:SetHeight(3)
+  accentTop:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  accentTop:SetVertexColor(THEME.gold[1], THEME.gold[2], THEME.gold[3], 1)
+  
   local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetPoint("TOP", headerBG, "TOP", 0, -10)
   h:SetText(isWeekly and "|cFFFFD700Weekly Leaderboard|r" or "|cFFFFD700Lifetime Leaderboard|r")
   
   local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -2907,8 +2957,24 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
 end
 
 local function BuildRosterPanel(panel)
+  -- Block header background
+  local headerBG = panel:CreateTexture(nil, "BACKGROUND")
+  headerBG:SetPoint("TOP", panel, "TOP", -15, -10)
+  headerBG:SetWidth(420)
+  headerBG:SetHeight(50)
+  headerBG:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  headerBG:SetVertexColor(0.15, 0.15, 0.18, 0.9)
+  
+  -- Top accent stripe
+  local accentTop = panel:CreateTexture(nil, "BORDER")
+  accentTop:SetPoint("TOPLEFT", headerBG, "TOPLEFT", 0, 0)
+  accentTop:SetPoint("TOPRIGHT", headerBG, "TOPRIGHT", 0, 0)
+  accentTop:SetHeight(3)
+  accentTop:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  accentTop:SetVertexColor(THEME.gold[1], THEME.gold[2], THEME.gold[3], 1)
+  
   local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetPoint("TOP", headerBG, "TOP", 0, -10)
   h:SetText("|cFFFFD700Guild Roster|r")
   
   local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -2917,7 +2983,7 @@ local function BuildRosterPanel(panel)
   
   -- SEARCH BAR
   local searchLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  searchLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -45)
+  searchLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -75)  -- ← MOVED DOWN (was -45)
   searchLabel:SetText("Search:")
   
   local searchBox = CreateFrame("EditBox", nil, panel)
@@ -2971,7 +3037,7 @@ local function BuildRosterPanel(panel)
   
   -- SCROLL FRAME (moved down for search bar)
   local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
-  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -75)
+  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -105)  -- ← MOVED DOWN (was -75)
   scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 12)
   scrollFrame:EnableMouse(true)
   scrollFrame:EnableMouseWheel(true)
@@ -3145,16 +3211,32 @@ end)
 end
 
 local function BuildHistoryPanel(panel)
+  -- Block header background
+  local headerBG = panel:CreateTexture(nil, "BACKGROUND")
+  headerBG:SetPoint("TOP", panel, "TOP", -15, -10)
+  headerBG:SetWidth(420)
+  headerBG:SetHeight(50)
+  headerBG:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  headerBG:SetVertexColor(0.15, 0.15, 0.18, 0.9)
+  
+  -- Top accent stripe
+  local accentTop = panel:CreateTexture(nil, "BORDER")
+  accentTop:SetPoint("TOPLEFT", headerBG, "TOPLEFT", 0, 0)
+  accentTop:SetPoint("TOPRIGHT", headerBG, "TOPRIGHT", 0, 0)
+  accentTop:SetHeight(3)
+  accentTop:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  accentTop:SetVertexColor(THEME.gold[1], THEME.gold[2], THEME.gold[3], 1)
+  
   local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetPoint("TOP", headerBG, "TOP", 0, -10)
   h:SetText("|cFFFFD700Point History|r")
   
   local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   subtitle:SetPoint("TOP", h, "BOTTOM", 0, -3)
   subtitle:SetText("|cFF888888Complete log of all your point transactions|r")
   
-  local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
-  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -45)
+local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
+  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -75)  -- ← CHANGED from -45
   scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 12)
   scrollFrame:EnableMouse(true)
   scrollFrame:EnableMouseWheel(true)
@@ -3174,7 +3256,7 @@ local function BuildHistoryPanel(panel)
   end)
   
   local scrollBar = CreateFrame("Slider", nil, panel)
-  scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -45)
+  scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -75)  -- ← CHANGED from -45
   scrollBar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 12)
   scrollBar:SetWidth(16)
   scrollBar:SetOrientation("VERTICAL")
@@ -3220,9 +3302,24 @@ local function BuildHistoryPanel(panel)
 end
 
 local function BuildBadgesPanel(panel)
-  -- Title
+  -- Block header background
+  local headerBG = panel:CreateTexture(nil, "BACKGROUND")
+  headerBG:SetPoint("TOP", panel, "TOP", -15, -10)
+  headerBG:SetWidth(420)
+  headerBG:SetHeight(50)
+  headerBG:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  headerBG:SetVertexColor(0.15, 0.15, 0.18, 0.9)
+  
+  -- Top accent stripe
+  local accentTop = panel:CreateTexture(nil, "BORDER")
+  accentTop:SetPoint("TOPLEFT", headerBG, "TOPLEFT", 0, 0)
+  accentTop:SetPoint("TOPRIGHT", headerBG, "TOPRIGHT", 0, 0)
+  accentTop:SetHeight(3)
+  accentTop:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  accentTop:SetVertexColor(THEME.gold[1], THEME.gold[2], THEME.gold[3], 1)
+  
   local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  title:SetPoint("TOP", panel, "TOP", 0, -10)
+  title:SetPoint("TOP", headerBG, "TOP", 0, -10)
   title:SetText("|cFFFFD700Milestone Badges|r")
   
   local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -3284,8 +3381,24 @@ local function BuildBadgesPanel(panel)
 end
 
 local function BuildAchievementsPanel(panel)
+  -- Block header background
+  local headerBG = panel:CreateTexture(nil, "BACKGROUND")
+  headerBG:SetPoint("TOP", panel, "TOP", -15, -10)
+  headerBG:SetWidth(420)
+  headerBG:SetHeight(50)
+  headerBG:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  headerBG:SetVertexColor(0.15, 0.15, 0.18, 0.9)
+  
+  -- Top accent stripe
+  local accentTop = panel:CreateTexture(nil, "BORDER")
+  accentTop:SetPoint("TOPLEFT", headerBG, "TOPLEFT", 0, 0)
+  accentTop:SetPoint("TOPRIGHT", headerBG, "TOPRIGHT", 0, 0)
+  accentTop:SetHeight(3)
+  accentTop:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+  accentTop:SetVertexColor(THEME.gold[1], THEME.gold[2], THEME.gold[3], 1)
+  
   local h = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  h:SetPoint("TOP", panel, "TOP", 0, -10)
+  h:SetPoint("TOP", headerBG, "TOP", 0, -10)
   h:SetText("|cFFFFD700Achievements|r")
   
   local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -3625,23 +3738,29 @@ function LeafVE.UI:RefreshBadges()
       end
     end
 
-    -- Set scroll height based on total rows needed
+        -- Set scroll height based on total rows needed
     local totalRows = math.ceil(table.getn(allBadges) / perRow)
-    local totalHeight = (totalRows * ySpacing) + 50
+    local totalHeight = math.max(800, (totalRows * ySpacing) + 50)  -- ← FORCE MINIMUM HEIGHT
     scrollChild:SetHeight(totalHeight)
   end
 
-  -- Update scrollbar visibility
-  local scrollRange = panel.scrollFrame:GetVerticalScrollRange()
-  if scrollRange > 0 then
-    panel.scrollBar:Show()
-  else
-    panel.scrollBar:Hide()
-  end
-
-  panel.scrollFrame:SetVerticalScroll(0)
-  panel.scrollBar:SetValue(0)
-end
+  -- Force update scroll range
+  scrollChild:SetHeight(math.max(1000, math.abs(yOffset) + 50))
+  
+  -- Wait a frame for layout to update
+  local updateFrame = CreateFrame("Frame")
+  updateFrame:SetScript("OnUpdate", function()
+    local scrollRange = panel.scrollFrame:GetVerticalScrollRange()
+    if scrollRange > 0 then
+      panel.scrollBar:SetMinMaxValues(0, scrollRange)
+      panel.scrollBar:Show()
+    else
+      panel.scrollBar:Hide()
+    end
+    panel.scrollFrame:SetVerticalScroll(0)
+    panel.scrollBar:SetValue(0)
+    updateFrame:SetScript("OnUpdate", nil)
+  end)
 
 function LeafVE.UI:RefreshAchievementsLeaderboard()
   if not self.panels or not self.panels.achievements then return end
@@ -3834,11 +3953,18 @@ function LeafVE.UI:Build()
     end
   end)
   
+  -- Title (CENTERED, GOLD)
   local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  title:SetPoint("TOPLEFT", f, "TOPLEFT", 40, -12)
-  title:SetText("Leaf Village Legends")
-  title:SetTextColor(THEME.white[1], THEME.white[2], THEME.white[3])
+  title:SetPoint("TOP", f, "TOP", 0, -12)  -- ← CENTERED
+  title:SetText("|cFFFFD700Leaf Village Legends|r")  -- ← GOLD COLOR
   
+  -- Subtitle description (centered below title)
+  local sub = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  sub:SetPoint("TOP", title, "BOTTOM", 0, -2)
+  sub:SetText("Auto-tracking: Login + Group Points")
+  sub:SetTextColor(0.7, 0.7, 0.7)
+  
+  -- Emblem (left side, keep existing)
   local emblem = f:CreateTexture(nil, "ARTWORK")
   emblem:SetWidth(22)
   emblem:SetHeight(22)
@@ -3847,10 +3973,11 @@ function LeafVE.UI:Build()
   if not emblem:GetTexture() then emblem:SetTexture(LEAF_FALLBACK) end
   emblem:SetVertexColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3], 1)
   
-  local sub = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  sub:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -34)
-  sub:SetText("Auto-tracking: Login + Group Points")
-  sub:SetTextColor(0.85, 0.88, 0.86)
+  -- Created by credit (FAR RIGHT)
+  local credit = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  credit:SetPoint("TOPRIGHT", f, "TOPRIGHT", -35, -12)
+  credit:SetText("|cFF2DD35CCreated by Methl|r")
+  credit:SetAlpha(0.9)
   
   local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -6, -6)
@@ -4164,7 +4291,13 @@ function LeafVE.UI:Refresh()
     
   elseif self.activeTab == "badges" and self.panels.badges then
     self.panels.badges:Show()
-    self:RefreshBadges()
+    
+    -- Force refresh after panel is shown
+    local badgeRefreshFrame = CreateFrame("Frame")
+    badgeRefreshFrame:SetScript("OnUpdate", function()
+      self:RefreshBadges()
+      badgeRefreshFrame:SetScript("OnUpdate", nil)
+    end)
     
   elseif self.activeTab == "achievements" and self.panels.achievements then
     self.panels.achievements:Show()
