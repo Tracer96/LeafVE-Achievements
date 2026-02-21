@@ -714,6 +714,48 @@ function LeafVE:BroadcastBadges()
   end
 end
 
+function LeafVE:BroadcastBadges()
+  if not InGuild() then return end
+  
+  local me = ShortName(UnitName("player"))
+  if not me then return end
+  
+  EnsureDB()
+  local myBadges = LeafVE_DB.badges[me] or {}
+  
+  -- Build compressed badge list: "badgeID:timestamp,badgeID:timestamp,..."
+  local badgeData = {}
+  for badgeId, timestamp in pairs(myBadges) do
+    table.insert(badgeData, badgeId..":"..timestamp)
+  end
+  
+  if table.getn(badgeData) > 0 then
+    local message = table.concat(badgeData, ",")
+    SendAddonMessage("LeafVE", "BADGES:"..message, "GUILD")
+    Print("Broadcast "..table.getn(badgeData).." badges to guild")
+  end
+end
+
+-- **ADD THIS FUNCTION HERE (Step 3)**
+function LeafVE:BroadcastPlayerNote(noteText)
+  if not InGuild() then return end
+  
+  local me = ShortName(UnitName("player"))
+  if not me then return end
+  
+  noteText = noteText or ""
+  
+  -- Escape special characters
+  noteText = string.gsub(noteText, "|", "||")
+  
+  SendAddonMessage("LeafVE", "NOTE:"..noteText, "GUILD")
+  Print("Broadcast player note to guild")
+end
+
+function LeafVE:OnAddonMessage(prefix, message, channel, sender)
+  -- ... existing code ...
+end
+
 function LeafVE:OnAddonMessage(prefix, message, channel, sender)
   if prefix ~= "LeafVE" then return end
   if channel ~= "GUILD" then return end
@@ -766,9 +808,30 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
     if LeafVE.UI and LeafVE.UI.cardCurrentPlayer == sender then
       LeafVE.UI:UpdateCardRecentBadges(sender)
     end
+    
+  -- **NEW: Parse player note sync message**
+  elseif string.sub(message, 1, 5) == "NOTE:" then
+    local noteText = string.sub(message, 6)
+    
+    -- Unescape special characters
+    noteText = string.gsub(noteText, "||", "|")
+    
+    EnsureDB()
+    if not LeafVE_GlobalDB.playerNotes then
+      LeafVE_GlobalDB.playerNotes = {}
+    end
+    
+    LeafVE_GlobalDB.playerNotes[sender] = noteText
+    Print("Received player note from "..sender)
+    
+    -- Refresh UI if viewing this player
+    if LeafVE.UI and LeafVE.UI.cardCurrentPlayer == sender then
+      if LeafVE.UI.cardNotesEdit then
+        LeafVE.UI.cardNotesEdit:SetText(noteText)
+      end
+    end
   end
 end
-
 function FindUnitToken(playerName)
   if UnitName("player") == playerName then return "player" end
   if UnitExists("target") and UnitName("target") == playerName then return "target" end
@@ -1050,8 +1113,8 @@ end)
   self.cardViewAllBtn = viewAllBtn
 
   local notesLabel = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  notesLabel:SetPoint("TOPLEFT", c, "TOPLEFT", 10, -490)
-  notesLabel:SetText("|cFF2DD35COfficer Notes|r")
+  notesLabel:SetPoint("TOPLEFT", c, "TOPLEFT", 10, -450)
+  notesLabel:SetText("|cFF2DD35CPlayer Note|r")
 
   local notesEditBox = CreateFrame("EditBox", nil, c)
   notesEditBox:SetPoint("TOPLEFT", notesLabel, "BOTTOMLEFT", 0, -5)
@@ -1075,30 +1138,84 @@ end)
   notesEditBG:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
   notesEditBG:SetFrameLevel(notesEditBox:GetFrameLevel() - 1)
   
-  notesEditBox:SetScript("OnEscapePressed", function() notesEditBox:ClearFocus() end)
-  notesEditBox:SetScript("OnEditFocusLost", function()
-    if self.cardCurrentPlayer then
-      EnsureDB()
-      local text = notesEditBox:GetText()
-      LeafVE_GlobalDB.playerNotes[self.cardCurrentPlayer] = text
-    end
+  notesEditBox:SetScript("OnEscapePressed", function() 
+    this:ClearFocus() 
   end)
   
   self.cardNotesEdit = notesEditBox
+  
+  -- Save button
+  local saveNoteBtn = CreateFrame("Button", nil, c, "UIPanelButtonTemplate")
+  saveNoteBtn:SetPoint("TOPLEFT", notesEditBox, "BOTTOMLEFT", 0, -5)
+  saveNoteBtn:SetWidth(100)
+  saveNoteBtn:SetHeight(22)
+  saveNoteBtn:SetText("Save Note")
+  SkinButtonAccent(saveNoteBtn)
+  
+  saveNoteBtn:SetScript("OnClick", function()
+    local cardPlayer = LeafVE.UI.cardCurrentPlayer
+    if not cardPlayer then 
+      Print("No player selected!")
+      return 
+    end
+    
+    EnsureDB()
+    local me = ShortName(UnitName("player"))
+    
+    -- Only save if editing your own note
+    if me and cardPlayer == me then
+      local text = notesEditBox:GetText()
+      if not LeafVE_GlobalDB.playerNotes then
+        LeafVE_GlobalDB.playerNotes = {}
+      end
+      LeafVE_GlobalDB.playerNotes[me] = text
+      
+      -- Clear focus
+      notesEditBox:ClearFocus()
+      
+      -- Broadcast the note change
+      LeafVE:BroadcastPlayerNote(text)
+      Print("Player note saved and broadcast!")
+    else
+      Print("You can only edit your own note!")
+    end
+  end)
+  
+  self.cardSaveNoteBtn = saveNoteBtn
 
+  -- Leaf Village Emblem
   local leafEmblem = c:CreateTexture(nil, "ARTWORK")
-  leafEmblem:SetWidth(28)
-  leafEmblem:SetHeight(28)
-  leafEmblem:SetPoint("BOTTOM", c, "BOTTOM", 0, 30)
-  leafEmblem:SetTexture(LEAF_EMBLEM)
-  if not leafEmblem:GetTexture() then leafEmblem:SetTexture(LEAF_FALLBACK) end
+  leafEmblem:SetWidth(32)
+  leafEmblem:SetHeight(32)
+  leafEmblem:SetPoint("CENTER", c, "CENTER", 0, -50)
+  leafEmblem:SetTexture("Interface\\Icons\\INV_Misc_Herb_8")
   leafEmblem:SetVertexColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3], 0.8)
 
   local leafLabel = c:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   leafLabel:SetPoint("TOP", leafEmblem, "BOTTOM", 0, -2)
   leafLabel:SetText("Leaf Village")
   leafLabel:SetTextColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3])
-end
+  
+  -- Debug output
+  Print("Attempting to load leaf emblem...")
+  Print("SetTexture returned: "..tostring(success))
+  
+  -- Check if it loaded
+  local loadedTexture = leafEmblem:GetTexture()
+  if loadedTexture then
+    Print("SUCCESS: Texture loaded - "..tostring(loadedTexture))
+  else
+    Print("FAILED: Texture not loaded, trying fallback")
+    leafEmblem:SetTexture("Interface\\Icons\\INV_Misc_Herb_01")
+  end
+  
+  leafEmblem:SetVertexColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3], 0.8)
+
+  local leafLabel = c:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  leafLabel:SetPoint("TOP", leafEmblem, "BOTTOM", 0, -2)
+  leafLabel:SetText("Leaf Village")
+  leafLabel:SetTextColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3])
+ end
 
 function LeafVE.UI:UpdateCardRecentBadges(playerName)
   Print("UpdateCardRecentBadges called for: "..tostring(playerName))
@@ -1286,18 +1403,44 @@ function LeafVE.UI:ShowPlayerCard(playerName)
     Print("ERROR: UpdateCardRecentBadges function does not exist!")
   end
   
-  if self.cardNotesEdit then
+    if self.cardNotesEdit then
+    EnsureDB()
+    if not LeafVE_GlobalDB.playerNotes then
+      LeafVE_GlobalDB.playerNotes = {}
+    end
+    
     local note = LeafVE_GlobalDB.playerNotes[playerName] or ""
     self.cardNotesEdit:SetText(note)
     
-    if self.cardNotesEdit.Enable then
-      if LeafVE:IsOfficer() then
-        self.cardNotesEdit:Enable()
-        self.cardNotesEdit:SetTextColor(1, 1, 1)
-      else
-        self.cardNotesEdit:Disable()
-        self.cardNotesEdit:SetTextColor(0.7, 0.7, 0.7)
+    local me = ShortName(UnitName("player"))
+    
+    -- Only allow editing your own note
+    if me and playerName == me then
+      -- Enable editing
+      self.cardNotesEdit:EnableMouse(true)
+      self.cardNotesEdit:EnableKeyboard(true)
+      self.cardNotesEdit:SetTextColor(1, 1, 1)
+      self.cardNotesEdit:SetAlpha(1)
+      
+      -- Show save button
+      if self.cardSaveNoteBtn then
+        self.cardSaveNoteBtn:Show()
+        self.cardSaveNoteBtn:Enable()
       end
+    else
+      -- Disable editing (Vanilla compatible)
+      self.cardNotesEdit:EnableMouse(false)
+      self.cardNotesEdit:EnableKeyboard(false)
+      self.cardNotesEdit:SetTextColor(0.5, 0.5, 0.5)
+      self.cardNotesEdit:SetAlpha(0.7)
+      
+      -- Hide save button for other players
+      if self.cardSaveNoteBtn then
+        self.cardSaveNoteBtn:Hide()
+      end
+      
+      -- Clear focus to prevent editing
+      self.cardNotesEdit:ClearFocus()
     end
   end
 
@@ -3065,6 +3208,12 @@ ef:SetScript("OnEvent", function()
       if broadcastTimer >= 5 then
         if InGuild() then
           LeafVE:BroadcastBadges()
+          
+          -- **NEW: Broadcast player note**
+          local me = ShortName(UnitName("player"))
+          if me and LeafVE_GlobalDB.playerNotes and LeafVE_GlobalDB.playerNotes[me] then
+            LeafVE:BroadcastPlayerNote(LeafVE_GlobalDB.playerNotes[me])
+          end
         end
         broadcastFrame:SetScript("OnUpdate", nil)
       end
@@ -3141,6 +3290,17 @@ end)
 -------------------------------------------------
 -- SLASH COMMANDS
 -------------------------------------------------
+
+SLASH_NOTESYNC1 = "/notesync"
+SlashCmdList["NOTESYNC"] = function()
+  local me = ShortName(UnitName("player"))
+  if me and LeafVE_GlobalDB.playerNotes and LeafVE_GlobalDB.playerNotes[me] then
+    LeafVE:BroadcastPlayerNote(LeafVE_GlobalDB.playerNotes[me])
+    Print("Broadcasting player note to guild...")
+  else
+    Print("You don't have a player note set!")
+  end
+end
 
 SLASH_BADGESYNC1 = "/badgesync"
 SlashCmdList["BADGESYNC"] = function()
