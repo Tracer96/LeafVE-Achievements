@@ -1236,16 +1236,16 @@ end)
  end
 
 -- Show All Badges Panel
-function UI:ShowAllBadgesPanel(playerName)
+function LeafVE.UI:ShowAllBadgesPanel(playerName)
   if not playerName then
     playerName = UnitName("player")
   end
 
   -- Create main frame
   if not self.allBadgesFrame then
-    local f = CreateFrame("Frame", "LeafVEAllBadgesFrame", UIParent, "BasicFrameTemplateWithInset")
-    f:SetSize(700, 550)
-    f:SetPoint("CENTER")
+    local f = CreateFrame("Frame", "LeafVEAllBadgesFrame", UIParent)
+    SetSize(f, 700, 550)
+    f:SetPoint("anchorPoint", parentFrame, "relativePoint", xOffset, yOffset)
     f:SetFrameStrata("DIALOG")
     f:EnableMouse(true)
     f:SetMovable(true)
