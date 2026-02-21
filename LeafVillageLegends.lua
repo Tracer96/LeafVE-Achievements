@@ -164,6 +164,11 @@ local function GetWeekDateRange()
   return date("%m/%d", startTS).." - "..date("%m/%d", endTS)
 end
 
+local function WeekKey(ts)
+  local d = date("*t", WeekStartTS(ts or Now()))
+  return string.format("%04d%02d%02d", d.year, d.month, d.day)
+end
+
 local function SkinFrameModern(f)
   f:SetBackdrop({
     bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -271,6 +276,7 @@ local function EnsureDB()
   if not LeafVE_DB.weeklyRecap then LeafVE_DB.weeklyRecap = {} end
   if not LeafVE_DB.loginStreaks then LeafVE_DB.loginStreaks = {} end
   if not LeafVE_DB.persistentRoster then LeafVE_DB.persistentRoster = {} end
+  if not LeafVE_DB.lboard then LeafVE_DB.lboard = { alltime = {}, weekly = {}, updatedAt = {} } end
   if LeafVE_DB.ui.w == nil then LeafVE_DB.ui.w = 950 end
   if LeafVE_DB.ui.h == nil then LeafVE_DB.ui.h = 660 end
   if LeafVE_DB.options.officerRankThreshold == nil then LeafVE_DB.options.officerRankThreshold = 4 end
@@ -820,18 +826,19 @@ function LeafVE:BroadcastLeaderboardData()
   
   EnsureDB()
   
+  local wk = WeekKey()
   local data = {}
   
   -- Add my lifetime stats
   local myAlltime = LeafVE_DB.alltime[me] or {L = 0, G = 0, S = 0}
   table.insert(data, string.format("L:%s:%d:%d:%d", me, myAlltime.L or 0, myAlltime.G or 0, myAlltime.S or 0))
   
-  -- Add my weekly stats
+  -- Add my weekly stats (keyed by week start date)
   local weekAgg = AggForThisWeek()
   local myWeek = weekAgg[me] or {L = 0, G = 0, S = 0}
-  table.insert(data, string.format("W:%s:%d:%d:%d", me, myWeek.L or 0, myWeek.G or 0, myWeek.S or 0))
+  table.insert(data, string.format("W%s:%s:%d:%d:%d", wk, me, myWeek.L or 0, myWeek.G or 0, myWeek.S or 0))
   
-  -- Send message (format: "L:PlayerName:L:G:S,W:PlayerName:L:G:S")
+  -- Send message (format: "LBOARD:L:PlayerName:L:G:S,W<weekKey>:PlayerName:L:G:S")
   local message = table.concat(data, ",")
   
   SendAddonMessage("LeafVE", "LBOARD:"..message, "GUILD")
@@ -970,11 +977,12 @@ end
       function LeafVE:ReceiveLeaderboardData(sender, playerData)
   EnsureDB()
   
-  -- Parse "L:PlayerName:L:G:S" or "W:PlayerName:L:G:S"
+  -- Parse "L:PlayerName:L:G:S" (lifetime) or "W<weekKey>:PlayerName:L:G:S" (weekly, new format)
+  -- Also accepts old "W:PlayerName:L:G:S" (unknown week → stored under current week key)
   local colonPos1 = string.find(playerData, ":")
   if not colonPos1 then return end
   
-  local dataType = string.sub(playerData, 1, colonPos1 - 1) -- "L" or "W"
+  local dataType = string.sub(playerData, 1, colonPos1 - 1) -- "L", "W", or "W20260217"
   local rest = string.sub(playerData, colonPos1 + 1)
   
   local colonPos2 = string.find(rest, ":")
@@ -995,30 +1003,19 @@ end
   local G = tonumber(string.sub(rest3, 1, colonPos4 - 1)) or 0
   local S = tonumber(string.sub(rest3, colonPos4 + 1)) or 0
   
-  -- Update the correct database
+  -- Store into dedicated lboard tables (never overwrite local accounting)
   if dataType == "L" then
-    -- Lifetime data
-    if not LeafVE_DB.alltime[playerName] then
-      LeafVE_DB.alltime[playerName] = {L = 0, G = 0, S = 0}
-    end
+    -- Lifetime synced data
+    LeafVE_DB.lboard.alltime[playerName] = {L = L, G = G, S = S}
+    LeafVE_DB.lboard.updatedAt[playerName] = Now()
     
-    LeafVE_DB.alltime[playerName].L = L
-    LeafVE_DB.alltime[playerName].G = G
-    LeafVE_DB.alltime[playerName].S = S
-    
-  elseif dataType == "W" then
-    -- Weekly data - store in a shared weekly cache
-    if not LeafVE_DB.weeklyCache then
-      LeafVE_DB.weeklyCache = {}
-    end
-    
-    if not LeafVE_DB.weeklyCache[playerName] then
-      LeafVE_DB.weeklyCache[playerName] = {L = 0, G = 0, S = 0}
-    end
-    
-    LeafVE_DB.weeklyCache[playerName].L = L
-    LeafVE_DB.weeklyCache[playerName].G = G
-    LeafVE_DB.weeklyCache[playerName].S = S
+  elseif string.sub(dataType, 1, 1) == "W" then
+    -- Weekly synced data; extract week key (new format "W20260217", old format "W" → current week)
+    local wk = string.sub(dataType, 2)
+    if wk == "" then wk = WeekKey() end  -- backward compat: old "W:Name:L:G:S"
+    if not LeafVE_DB.lboard.weekly[wk] then LeafVE_DB.lboard.weekly[wk] = {} end
+    LeafVE_DB.lboard.weekly[wk][playerName] = {L = L, G = G, S = S}
+    LeafVE_DB.lboard.updatedAt[playerName] = Now()
   end
 end
 
@@ -2808,15 +2805,34 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
   
   local leaders = {}
   
- if isWeekly then
-  -- Use synced weekly cache if available, otherwise fall back to local data
-  local weekAgg = LeafVE_DB.weeklyCache or AggForThisWeek()
-  
-  for _, guildInfo in pairs(LeafVE.guildRosterCache) do
-    local name = guildInfo.name
-    local pts = weekAgg[name] or {L = 0, G = 0, S = 0}
-    local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
-      
+  -- Build a unified member set from persistentRoster (stable, includes offline)
+  -- supplemented by current guildRosterCache for class/rank metadata
+  local memberSet = {}
+  if LeafVE_DB.persistentRoster then
+    for lowerName, info in pairs(LeafVE_DB.persistentRoster) do
+      memberSet[lowerName] = info
+    end
+  end
+  -- Overlay live cache data for freshest metadata
+  for lowerName, info in pairs(LeafVE.guildRosterCache) do
+    memberSet[lowerName] = info
+  end
+
+  if isWeekly then
+    -- Use synced weekly data for the current week key; fall back to local aggregation
+    local wk = WeekKey()
+    local syncedWeek = LeafVE_DB.lboard.weekly[wk]
+    local localWeek = AggForThisWeek()
+    
+    for _, guildInfo in pairs(memberSet) do
+      local name = guildInfo.name
+      local pts
+      if syncedWeek and syncedWeek[name] then
+        pts = syncedWeek[name]
+      else
+        pts = localWeek[name] or {L = 0, G = 0, S = 0}
+      end
+      local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
       table.insert(leaders, {
         name = name, total = total,
         L = pts.L or 0, G = pts.G or 0, S = pts.S or 0,
@@ -2824,11 +2840,15 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
       })
     end
   else
-    for _, guildInfo in pairs(LeafVE.guildRosterCache) do
+    for _, guildInfo in pairs(memberSet) do
       local name = guildInfo.name
-      local pts = LeafVE_DB.alltime[name] or {L = 0, G = 0, S = 0}
+      local pts
+      if LeafVE_DB.lboard.alltime[name] then
+        pts = LeafVE_DB.lboard.alltime[name]
+      else
+        pts = LeafVE_DB.alltime[name] or {L = 0, G = 0, S = 0}
+      end
       local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
-      
       table.insert(leaders, {
         name = name, total = total,
         L = pts.L or 0, G = pts.G or 0, S = pts.S or 0,
