@@ -1080,6 +1080,18 @@ self.cardRecentBadgesFrame = recentBadgesFrame
 
 self.cardRecentBadgeFrames = {}
 
+  -- View All Badges Button
+  local viewAllBadgesBtn = CreateFrame("Button", nil, c, "UIPanelButtonTemplate")
+  viewAllBadgesBtn:SetWidth(140)
+  viewAllBadgesBtn:SetHeight(22)
+  viewAllBadgesBtn:SetPoint("TOPLEFT", recentBadgesFrame, "BOTTOMLEFT", 0, -10)
+  viewAllBadgesBtn:SetText("View All Badges")
+  SkinButtonAccent(viewAllBadgesBtn)
+  viewAllBadgesBtn:SetScript("OnClick", function()
+    LeafVE.UI:ShowAllBadgesPanel(LeafVE.UI.inspectedPlayer or UnitName("player"))
+  end)
+  self.viewAllBadgesBtn = viewAllBadgesBtn
+
   -- Achievements Section
   local achLabel = c:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   achLabel:SetPoint("TOPRIGHT", c, "TOPRIGHT", -40, -300)
@@ -1222,6 +1234,186 @@ end)
   leafLabel:SetText("Leaf Village")
   leafLabel:SetTextColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3])
  end
+
+-- Show All Badges Panel
+function UI:ShowAllBadgesPanel(playerName)
+  if not playerName then
+    playerName = UnitName("player")
+  end
+
+  -- Create main frame
+  if not self.allBadgesFrame then
+    local f = CreateFrame("Frame", "LeafVEAllBadgesFrame", UIParent, "BasicFrameTemplateWithInset")
+    f:SetSize(700, 550)
+    f:SetPoint("CENTER")
+    f:SetFrameStrata("DIALOG")
+    f:EnableMouse(true)
+    f:SetMovable(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetClampedToScreen(true)
+    
+    -- Title
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    f.title:SetPoint("TOP", f, "TOP", 0, -5)
+    
+    -- Close button (already exists from BasicFrameTemplateWithInset)
+    
+    -- Scroll Frame
+    local scrollFrame = CreateFrame("ScrollFrame", "LeafVEAllBadgesScrollFrame", f, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", f.InsetBg or f, "TOPLEFT", 10, -40)
+    scrollFrame:SetPoint("BOTTOMRIGHT", f.InsetBg or f, "BOTTOMRIGHT", -30, 10)
+    
+    -- Content Frame
+    local content = CreateFrame("Frame", nil, scrollFrame)
+    content:SetWidth(scrollFrame:GetWidth())
+    content:SetHeight(1) -- Will be updated dynamically
+    scrollFrame:SetScrollChild(content)
+    
+    f.scrollFrame = scrollFrame
+    f.content = content
+    
+    self.allBadgesFrame = f
+  end
+
+  local f = self.allBadgesFrame
+  f.title:SetText(playerName .. "'s Badge Collection")
+  
+  -- Clear existing content
+  if f.badgeIcons then
+    for _, icon in ipairs(f.badgeIcons) do
+      icon:Hide()
+      icon:SetParent(nil)
+    end
+  end
+  f.badgeIcons = {}
+  
+  -- Get player's badges
+  local profile = self:GetProfileForPlayer(playerName)
+  local playerBadges = {}
+  if profile and profile.badges then
+    for _, badge in ipairs(profile.badges) do
+      playerBadges[badge.id] = badge
+    end
+  end
+  
+  -- Organize badges by category
+  local categories = {}
+  for id, badge in pairs(LeafVE.Badges) do
+    local category = badge.category or "Other"
+    if not categories[category] then
+      categories[category] = {}
+    end
+    table.insert(categories[category], {
+      id = id,
+      name = badge.name,
+      description = badge.description,
+      icon = badge.icon,
+      earned = playerBadges[id] ~= nil,
+      earnedDate = playerBadges[id] and playerBadges[id].earned or nil
+    })
+  end
+  
+  -- Sort categories
+  local sortedCategories = {}
+  for category, _ in pairs(categories) do
+    table.insert(sortedCategories, category)
+  end
+  table.sort(sortedCategories)
+  
+  -- Build UI
+  local yOffset = -10
+  local content = f.content
+  
+  for _, category in ipairs(sortedCategories) do
+    -- Category Header
+    local header = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", content, "TOPLEFT", 10, yOffset)
+    header:SetText("|cFFFFD700" .. category .. "|r")
+    table.insert(f.badgeIcons, header)
+    yOffset = yOffset - 30
+    
+    -- Sort badges in category (earned first)
+    table.sort(categories[category], function(a, b)
+      if a.earned ~= b.earned then
+        return a.earned
+      end
+      return a.name < b.name
+    end)
+    
+    -- Display badges in grid
+    local xOffset = 10
+    local col = 0
+    local maxCols = 5
+    local iconSize = 50
+    local spacing = 10
+    
+    for _, badgeData in ipairs(categories[category]) do
+      local icon = CreateFrame("Frame", nil, content)
+      icon:SetSize(iconSize, iconSize)
+      icon:SetPoint("TOPLEFT", content, "TOPLEFT", xOffset, yOffset)
+      
+      -- Badge texture
+      local tex = icon:CreateTexture(nil, "ARTWORK")
+      tex:SetAllPoints()
+      tex:SetTexture(badgeData.icon)
+      
+      if not badgeData.earned then
+        tex:SetDesaturated(true)
+        tex:SetAlpha(0.3)
+      end
+      
+      -- Border
+      local border = icon:CreateTexture(nil, "OVERLAY")
+      border:SetAllPoints()
+      border:SetTexture("Interface\\AchievementFrame\\UI-Achievement-IconFrame")
+      border:SetTexCoord(0, 0.5625, 0, 0.5625)
+      
+      -- Tooltip
+      icon:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(badgeData.name, 1, 1, 1)
+        GameTooltip:AddLine(badgeData.description, nil, nil, nil, true)
+        if badgeData.earned and badgeData.earnedDate then
+          GameTooltip:AddLine(" ", 1, 1, 1)
+          GameTooltip:AddLine("Earned: " .. date("%m/%d/%Y", badgeData.earnedDate), 0.5, 0.5, 0.5)
+        elseif not badgeData.earned then
+          GameTooltip:AddLine(" ", 1, 1, 1)
+          GameTooltip:AddLine("Not yet earned", 0.5, 0.5, 0.5)
+        end
+        GameTooltip:Show()
+      end)
+      icon:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+      end)
+      
+      table.insert(f.badgeIcons, icon)
+      
+      col = col + 1
+      if col >= maxCols then
+        col = 0
+        xOffset = 10
+        yOffset = yOffset - (iconSize + spacing)
+      else
+        xOffset = xOffset + iconSize + spacing
+      end
+    end
+    
+    -- Move to next row if we didn't finish a full row
+    if col > 0 then
+      yOffset = yOffset - (iconSize + spacing)
+    end
+    
+    yOffset = yOffset - 20 -- Extra space between categories
+  end
+  
+  -- Update content height
+  content:SetHeight(math.abs(yOffset) + 50)
+  
+  -- Show frame
+  f:Show()
+end
 
 function LeafVE.UI:UpdateCardRecentBadges(playerName)
   Print("UpdateCardRecentBadges called for: "..tostring(playerName))
