@@ -799,6 +799,7 @@ function LeafVE:BroadcastBadges()
   EnsureDB()
   local myBadges = LeafVE_DB.badges[me] or {}
   
+  -- Build compressed badge list: "badgeID:timestamp,badgeID:timestamp,..."
   local badgeData = {}
   for badgeId, timestamp in pairs(myBadges) do
     table.insert(badgeData, badgeId..":"..timestamp)
@@ -811,36 +812,27 @@ function LeafVE:BroadcastBadges()
   end
 end
 
--- ADD THIS FUNCTION RIGHT HERE
-function LeafVE:BroadcastPoints()
-  if not InGuild() then 
-    Print("ERROR: Not in guild, cannot broadcast points")
-    return 
-  end
+function LeafVE:BroadcastBadges()
+  if not InGuild() then return end
   
   local me = ShortName(UnitName("player"))
-  if not me then 
-    Print("ERROR: Cannot get player name")
-    return 
-  end
+  if not me then return end
   
   EnsureDB()
+  local myBadges = LeafVE_DB.badges[me] or {}
   
-  local alltime = LeafVE_DB.alltime[me] or {L = 0, G = 0, S = 0}
+  -- Build compressed badge list: "badgeID:timestamp,badgeID:timestamp,..."
+  local badgeData = {}
+  for badgeId, timestamp in pairs(myBadges) do
+    table.insert(badgeData, badgeId..":"..timestamp)
+  end
   
-  local message = string.format("L:%d,G:%d,S:%d", alltime.L or 0, alltime.G or 0, alltime.S or 0)
-  
-  Print("Broadcasting points: "..message)
-  local success = SendAddonMessage("LeafVE", "POINTS:"..message, "GUILD")
-  
-  if success then
-    Print("✓ Points broadcast successful")
-  else
-    Print("✗ Points broadcast FAILED")
+  if table.getn(badgeData) > 0 then
+    local message = table.concat(badgeData, ",")
+    SendAddonMessage("LeafVE", "BADGES:"..message, "GUILD")
+    Print("Broadcast "..table.getn(badgeData).." badges to guild")
   end
 end
-
-function LeafVE:BroadcastPlayerNote(noteText)
 
 -- **ADD THIS FUNCTION HERE (Step 3)**
 function LeafVE:BroadcastPlayerNote(noteText)
@@ -856,6 +848,10 @@ function LeafVE:BroadcastPlayerNote(noteText)
   
   SendAddonMessage("LeafVE", "NOTE:"..noteText, "GUILD")
   Print("Broadcast player note to guild")
+end
+
+function LeafVE:OnAddonMessage(prefix, message, channel, sender)
+  -- ... existing code ...
 end
 
 function LeafVE:OnAddonMessage(prefix, message, channel, sender)
@@ -934,7 +930,6 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
     end
   end
 end
-  
 function FindUnitToken(playerName)
   if UnitName("player") == playerName then return "player" end
   if UnitExists("target") and UnitName("target") == playerName then return "target" end
@@ -1226,10 +1221,19 @@ self.viewAllBadgesBtn = viewAllBadgesBtn
   viewAllBtn:SetText("View All Achievements")
   SkinButtonAccent(viewAllBtn)
 viewAllBtn:SetScript("OnClick", function()
-  if LeafVE.UI.cardCurrentPlayer then
+  if not LeafVE.UI.cardCurrentPlayer then return end
+  
+  -- Create popup if it doesn't exist
+  if not LeafVE.UI.achPopup then
     LeafVE.UI:CreateAchievementListPopup()
+  end
+  
+  -- Toggle open/closed
+  if LeafVE.UI.achPopup:IsVisible() then
+    LeafVE.UI.achPopup:Hide()
+  else
     LeafVE.UI:RefreshAchievementPopup(LeafVE.UI.cardCurrentPlayer)
-    LeafVE.UI.achPopup:Show()  -- ADD THIS LINE
+    LeafVE.UI.achPopup:Show()
   end
 end)
   self.cardViewAllBtn = viewAllBtn
@@ -1394,27 +1398,383 @@ function LeafVE.UI:ShowAllBadgesPanel(playerName)
     
     self.allBadgesFrame = f
   end
+local f = self.allBadgesFrame
+f.title:SetText(playerName .. "'s Badge Collection")
 
-  local f = self.allBadgesFrame
-  f.title:SetText(playerName .. "'s Badge Collection")
+-- Destroy and recreate content frame to force refresh
+if f.content then
+  f.content:Hide()
+  f.content:SetParent(nil)
+  f.content = nil
+end
+
+-- Create fresh content frame
+local content = CreateFrame("Frame", nil, f.scrollFrame)
+content:SetWidth(400)
+content:SetHeight(1)
+f.scrollFrame:SetScrollChild(content)
+f.content = content
+
+f.badgeIcons = {}
   
-  -- Destroy and recreate content frame to force refresh
-  if f.content then
-    f.content:Hide()
-    f.content:SetParent(nil)
-    f.content = nil
+-- Get player's badges
+EnsureDB()
+local shortName = ShortName(playerName)
+local playerBadges = {}
+if shortName and LeafVE_DB.badges[shortName] then
+  for badgeId, timestamp in pairs(LeafVE_DB.badges[shortName]) do
+    playerBadges[badgeId] = {
+      id = badgeId,
+      earned = timestamp
+    }
   end
+end
 
-  -- Create fresh content frame
-  local content = CreateFrame("Frame", nil, f.scrollFrame)
-  content:SetWidth(400)
-  content:SetHeight(1)
-  f.scrollFrame:SetScrollChild(content)
-  f.content = content
-
-  f.badgeIcons = {}
+-- DEBUG: Print what we found
+DEFAULT_CHAT_FRAME:AddMessage("Showing badges for: " .. playerName)
+DEFAULT_CHAT_FRAME:AddMessage("Short name: " .. tostring(shortName))
+local count = 0
+for k, v in pairs(playerBadges) do
+  count = count + 1
+end
+DEFAULT_CHAT_FRAME:AddMessage("Found " .. count .. " earned badges")
+  
+-- Organize badges by category
+local categories = {}
+for i = 1, table.getn(BADGES) do
+  local badge = BADGES[i]
+  local category = badge.category or "Other"
+  
+  if not categories[category] then
+    categories[category] = {}
+  end
+  
+  table.insert(categories[category], {
+    id = badge.id,
+    name = badge.name,
+    description = badge.desc,
+    icon = badge.icon,
+    earned = playerBadges[badge.id] ~= nil,
+    earnedDate = playerBadges[badge.id] and playerBadges[badge.id].earned or nil
+  })
 end
   
+  -- Sort categories
+  local sortedCategories = {}
+  for category, _ in pairs(categories) do
+    table.insert(sortedCategories, category)
+  end
+  table.sort(sortedCategories)
+  
+  -- Build UI
+  local yOffset = -10
+  local content = f.content
+  
+  for _, category in ipairs(sortedCategories) do
+    -- Category Header
+    local header = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", content, "TOPLEFT", 10, yOffset)
+    header:SetText("|cFFFFD700" .. category .. "|r")
+    table.insert(f.badgeIcons, header)
+    yOffset = yOffset - 30
+    
+    -- Sort badges in category (earned first)
+    table.sort(categories[category], function(a, b)
+      if a.earned ~= b.earned then
+        return a.earned
+      end
+      return a.name < b.name
+    end)
+    
+    -- Display badges in grid
+    local xOffset = 10
+    local col = 0
+    local maxCols = 4
+    local iconSize = 50
+    local spacing = 10
+    
+for _, badgeData in ipairs(categories[category]) do
+  local icon = CreateFrame("Frame", nil, content)
+  icon:SetWidth(iconSize)
+  icon:SetHeight(iconSize)
+  icon:SetPoint("TOPLEFT", content, "TOPLEFT", xOffset, yOffset)
+  
+  icon:EnableMouse(true)  -- ← ADD THIS LINE!
+      
+      -- Badge texture
+      local tex = icon:CreateTexture(nil, "ARTWORK")
+      tex:SetAllPoints()
+      tex:SetTexture(badgeData.icon)
+      
+      if not badgeData.earned then
+        tex:SetDesaturated(true)
+        tex:SetAlpha(0.3)
+      end
+      
+      -- Border
+      local border = icon:CreateTexture(nil, "OVERLAY")
+      border:SetAllPoints()
+      border:SetTexture("Interface\\AchievementFrame\\UI-Achievement-IconFrame")
+      border:SetTexCoord(0, 0.5625, 0, 0.5625)
+      
+      --- Tooltip
+-- Store badge data on icon for tooltip
+icon.badgeName = badgeData.name
+icon.badgeDesc = badgeData.description
+icon.badgeEarned = badgeData.earned
+icon.badgeEarnedDate = badgeData.earnedDate
+
+-- Store badge data on icon for tooltip
+icon.badgeName = badgeData.name
+icon.badgeDesc = badgeData.description
+icon.badgeEarned = badgeData.earned
+icon.badgeEarnedDate = badgeData.earnedDate
+
+-- Tooltip
+icon:SetScript("OnEnter", function()
+  GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+  GameTooltip:ClearLines()
+  
+  if this.badgeEarned then
+    GameTooltip:SetText(this.badgeName, THEME.gold[1], THEME.gold[2], THEME.gold[3], 1, true)
+    GameTooltip:AddLine(this.badgeDesc, 1, 1, 1, true)
+    if this.badgeEarnedDate then
+      GameTooltip:AddLine(" ", 1, 1, 1)
+      GameTooltip:AddLine("Earned: " .. date("%m/%d/%Y", this.badgeEarnedDate), 0.5, 0.8, 0.5)
+    end
+  else
+    GameTooltip:SetText(this.badgeName, 0.6, 0.6, 0.6, 1, true)
+    GameTooltip:AddLine(this.badgeDesc, 0.7, 0.7, 0.7, true)
+    GameTooltip:AddLine(" ", 1, 1, 1)
+    GameTooltip:AddLine("Not yet earned", 0.8, 0.4, 0.4)
+  end
+  
+  GameTooltip:Show()
+end)
+
+icon:SetScript("OnLeave", function()
+  GameTooltip:Hide()
+end)  
+      table.insert(f.badgeIcons, icon)
+      
+      col = col + 1
+      if col >= maxCols then
+        col = 0
+        xOffset = 10
+        yOffset = yOffset - (iconSize + spacing)
+      else
+        xOffset = xOffset + iconSize + spacing
+      end
+    end
+    
+    -- Move to next row if we didn't finish a full row
+    if col > 0 then
+      yOffset = yOffset - (iconSize + spacing)
+    end
+    
+    yOffset = yOffset - 20 -- Extra space between categories
+  end
+  
+  -- Update content height
+  content:SetHeight(math.abs(yOffset) + 50)
+  
+  -- Show frame
+  f:Show()
+end
+
+function LeafVE.UI:UpdateCardRecentBadges(playerName)
+  Print("UpdateCardRecentBadges called for: "..tostring(playerName))
+  
+  if not self.cardRecentBadgesFrame then
+    Print("ERROR: cardRecentBadgesFrame is nil!")
+    return
+  end
+  
+  if not self.cardRecentBadgeFrames then
+    Print("ERROR: cardRecentBadgeFrames is nil!")
+    return
+  end
+  
+  Print("Frames exist, continuing...")
+  
+  -- Hide all existing badge frames
+  for i = 1, table.getn(self.cardRecentBadgeFrames) do
+    self.cardRecentBadgeFrames[i]:Hide()
+  end
+  
+  local shortName = ShortName(playerName)
+  Print("Short name: "..tostring(shortName))
+  
+  EnsureDB()
+  
+  local myBadges = LeafVE_DB.badges[shortName] or {}
+  Print("Found badges for player: "..tostring(table.getn(myBadges)))
+  
+  -- Build list of earned badges with timestamps
+  local earnedBadges = {}
+  for i = 1, table.getn(BADGES) do
+    local badge = BADGES[i]
+    if myBadges[badge.id] then
+      table.insert(earnedBadges, {
+        id = badge.id,
+        name = badge.name,
+        desc = badge.desc,
+        icon = badge.icon,
+        earnedAt = myBadges[badge.id],
+        earned = true
+      })
+    end
+  end
+  
+  Print("Total earned badges: "..table.getn(earnedBadges))
+  
+  -- Sort by most recent first
+  table.sort(earnedBadges, function(a, b)
+    return a.earnedAt > b.earnedAt
+  end)
+  
+  -- Take top 9 earned badges
+  local topEarned = {}
+  for i = 1, math.min(9, table.getn(earnedBadges)) do
+    table.insert(topEarned, earnedBadges[i])
+  end
+  
+  -- Fill remaining slots with locked badges (not yet earned)
+  if table.getn(topEarned) < 9 then
+    for i = 1, table.getn(BADGES) do
+      if table.getn(topEarned) >= 9 then break end
+      
+      local badge = BADGES[i]
+      local alreadyShown = false
+      
+      for j = 1, table.getn(topEarned) do
+        if topEarned[j].id == badge.id then
+          alreadyShown = true
+          break
+        end
+      end
+      
+      if not alreadyShown then
+        table.insert(topEarned, {
+          id = badge.id,
+          name = badge.name,
+          desc = badge.desc,
+          icon = badge.icon,
+          earnedAt = nil,
+          earned = false
+        })
+      end
+    end
+  end
+  
+  -- Display all 9 badges (earned + locked)
+  local badgeSize = 45
+  local xSpacing = 50
+  local ySpacing = 50
+  local perRow = 3
+  
+  for i = 1, 9 do  -- ← CHANGE FROM 6 TO 9
+    local badge = topEarned[i]
+    local frame = self.cardRecentBadgeFrames[i]
+    
+    Print("Creating/updating badge "..i..": "..(badge and badge.name or "empty slot"))
+    
+    if not frame then
+      Print("Creating NEW frame for badge "..i)
+      frame = CreateFrame("Frame", nil, self.cardRecentBadgesFrame)
+      frame:SetWidth(badgeSize)
+      frame:SetHeight(badgeSize)
+      frame:EnableMouse(true)
+      
+      local icon = frame:CreateTexture(nil, "ARTWORK")
+      icon:SetAllPoints(frame)
+      frame.icon = icon
+      
+      table.insert(self.cardRecentBadgeFrames, frame)
+    end
+    
+    -- Position: grid layout (3 per row)
+    local row = math.floor((i - 1) / perRow)
+    local col = math.mod(i - 1, perRow)
+    
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPLEFT", self.cardRecentBadgesFrame, "TOPLEFT", col * xSpacing, -row * ySpacing)
+    
+    Print("Positioned at col="..col.." row="..row)
+    
+    if badge then
+      -- Set icon
+      frame.icon:SetTexture(badge.icon)
+      if not frame.icon:GetTexture() then
+        frame.icon:SetTexture(LEAF_FALLBACK)
+      end
+      
+      -- Style: earned = full color, locked = greyed out
+      if badge.earned then
+        frame.icon:SetVertexColor(1, 1, 1, 1)
+        frame.icon:SetDesaturated(nil)
+      else
+        frame.icon:SetVertexColor(0.4, 0.4, 0.4, 0.7)
+        if frame.icon.SetDesaturated then
+          frame.icon:SetDesaturated(true)
+        end
+      end
+      
+      -- Tooltip
+      frame:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        
+        if badge.earned then
+          GameTooltip:SetText(badge.name, THEME.gold[1], THEME.gold[2], THEME.gold[3], 1, true)
+          GameTooltip:AddLine(badge.desc, 1, 1, 1, true)
+          GameTooltip:AddLine(" ", 1, 1, 1)
+          GameTooltip:AddLine("Earned: "..date("%m/%d/%Y", badge.earnedAt), 0.5, 0.8, 0.5)
+        else
+          GameTooltip:SetText(badge.name, 0.6, 0.6, 0.6, 1, true)
+          GameTooltip:AddLine(badge.desc, 0.7, 0.7, 0.7, true)
+          GameTooltip:AddLine(" ", 1, 1, 1)
+          GameTooltip:AddLine("Not yet earned", 0.8, 0.4, 0.4)
+        end
+        
+        GameTooltip:Show()
+      end)
+      
+      frame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+      end)
+    else
+      -- Empty slot
+      frame.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+      frame.icon:SetVertexColor(0.3, 0.3, 0.3, 0.5)
+      if frame.icon.SetDesaturated then
+        frame.icon:SetDesaturated(true)
+      end
+      
+      frame:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        GameTooltip:SetText("Empty Badge Slot", 0.5, 0.5, 0.5, 1, true)
+        GameTooltip:Show()
+      end)
+      
+      frame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+      end)
+    end
+    
+    frame:Show()
+    Print("Badge "..i.." frame shown")
+  end
+  
+  -- Hide "No badges" text
+  if self.cardNoBadgesText then
+    self.cardNoBadgesText:Hide()
+  end
+  
+  Print("UpdateCardRecentBadges complete")
+end
+
 function LeafVE.UI:ShowPlayerCard(playerName)
   EnsureDB()
   playerName = ShortName(playerName)
@@ -1697,9 +2057,19 @@ function LeafVE.UI:CreateAchievementListPopup()
   if self.achPopup then return end
   
   local popup = CreateFrame("Frame", "LeafVE_AchievementListPopup", UIParent)
-  popup:SetWidth(600)
-  popup:SetHeight(500)
-  popup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+  popup:SetWidth(450)
+  popup:SetFrameStrata("DIALOG")
+  popup:EnableMouse(true)
+  
+  -- Anchor to right side of main UI panel (matching badge popup)
+  if LeafVE.UI.frame then
+    popup:SetPoint("TOPLEFT", LeafVE.UI.frame, "TOPRIGHT", 5, 0)
+    popup:SetHeight(LeafVE.UI.frame:GetHeight())
+  else
+    popup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    popup:SetHeight(500)
+  end
+  
   popup:SetBackdrop({
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
     edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -1707,17 +2077,13 @@ function LeafVE.UI:CreateAchievementListPopup()
     insets = { left = 11, right = 12, top = 12, bottom = 11 }
   })
   popup:SetBackdropColor(0, 0, 0, 0.95)
-  popup:EnableMouse(true)
-  popup:SetMovable(true)
-  popup:RegisterForDrag("LeftButton")
-  popup:SetScript("OnDragStart", function() this:StartMoving() end)
-  popup:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
   popup:Hide()
   
-  -- Title
+  -- Title (gold like badge collection)
   local titleText = popup:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  titleText:SetPoint("TOP", popup, "TOP", 0, -20)
-  titleText:SetText("|cFFFFD700Achievements|r")
+  titleText:SetPoint("TOP", popup, "TOP", 0, -15)
+  titleText:SetTextColor(THEME.gold[1], THEME.gold[2], THEME.gold[3])
+  popup.titleText = titleText
   
   -- Player name
   local playerNameText = popup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1755,7 +2121,7 @@ end
 function LeafVE.UI:RefreshAchievementPopup(playerName)
   if not self.achPopup then return end
   
-  self.achPopup.playerNameText:SetText(playerName.."'s Achievements")
+  self.achPopup.titleText:SetText(playerName.."'s Achievements")  -- ← Change this line
   
   local achievements = {}
   
@@ -2608,12 +2974,23 @@ function LeafVE.UI:RefreshRoster()
     btn.text:SetText(string.format("%s%s - Lvl %s %s", onlineIndicator, member.name, tostring(member.level), member.rank))
     btn.text:SetTextColor(classColor[1], classColor[2], classColor[3])
     
-    btn.playerName = member.name
-    btn:SetScript("OnClick", function()
-      if LeafVE.UI.cardCurrentPlayer ~= this.playerName then
-        LeafVE.UI:ShowPlayerCard(this.playerName)
-      end
-    end)
+btn.playerName = member.name
+btn:SetScript("OnClick", function()
+  -- Close badge collection popup when switching players
+  if LeafVE.UI.allBadgesFrame and LeafVE.UI.allBadgesFrame:IsVisible() then
+    LeafVE.UI.allBadgesFrame:Hide()
+  end
+  
+  -- Close achievement popup when switching players
+  if LeafVE.UI.achPopup and LeafVE.UI.achPopup:IsVisible() then
+    LeafVE.UI.achPopup:Hide()
+  end
+  
+  if LeafVE.UI.cardCurrentPlayer ~= this.playerName then
+    LeafVE.UI.inspectedPlayer = this.playerName
+    LeafVE.UI:ShowPlayerCard(this.playerName)
+  end
+end)
     
     btn:Show()
     yOffset = yOffset - buttonHeight
@@ -3706,37 +4083,24 @@ ef:RegisterEvent("RAID_ROSTER_UPDATE")
 local groupCheckTimer = 0
 local notificationTimer = 0
 local attendanceTimer = 0
-local badgeSyncTimer = 0
-local pointsSyncTimer = 0
 
 ef:SetScript("OnEvent", function()
   if event == "ADDON_LOADED" and arg1 == LeafVE.name then
     EnsureDB()
     
-    -- Register addon message prefixes with debug output
+    -- Safely register addon message prefixes
     if RegisterAddonMessagePrefix then
-      local success1 = RegisterAddonMessagePrefix("LeafVE")
-      local success2 = RegisterAddonMessagePrefix("LeafVEAch")
-      
-      if success1 then
-        Print("✓ Registered LeafVE prefix")
-      else
-        Print("✗ FAILED to register LeafVE prefix!")
-      end
-      
-      if success2 then
-        Print("✓ Registered LeafVEAch prefix")
-      else
-        Print("✗ FAILED to register LeafVEAch prefix!")
-      end
+      RegisterAddonMessagePrefix("LeafVE")
+      RegisterAddonMessagePrefix("LeafVEAch")
+      Debug("Registered addon message prefixes")
     else
-      Print("✗ RegisterAddonMessagePrefix not available!")
+      Print("Warning: RegisterAddonMessagePrefix not available!")
     end
     
     LeafVE:CreateMinimapButton()
     Print("Addon loaded v"..LeafVE.version.."! Use /lve or /leaf to open")
     return
-  end
+  end  -- <-- ADD THIS LINE!
   
   if event == "PLAYER_LOGIN" then
     Print("Loaded v"..LeafVE.version)
@@ -3751,8 +4115,8 @@ ef:SetScript("OnEvent", function()
       if broadcastTimer >= 5 then
         if InGuild() then
           LeafVE:BroadcastBadges()
-          LeafVE:BroadcastPoints()  -- ← ADD THIS
           
+          -- **NEW: Broadcast player note**
           local me = ShortName(UnitName("player"))
           if me and LeafVE_GlobalDB.playerNotes and LeafVE_GlobalDB.playerNotes[me] then
             LeafVE:BroadcastPlayerNote(LeafVE_GlobalDB.playerNotes[me])
@@ -3780,8 +4144,31 @@ updateFrame:SetScript("OnUpdate", function()
   groupCheckTimer = groupCheckTimer + arg1
   notificationTimer = notificationTimer + arg1
   attendanceTimer = attendanceTimer + arg1
+  
+  if groupCheckTimer >= 30 then
+    groupCheckTimer = 0
+    LeafVE:OnGroupUpdate()
+  end
+  
+  if notificationTimer >= 0.1 then
+    notificationTimer = 0
+    LeafVE:ProcessNotifications()
+  end
+  
+  if attendanceTimer >= 300 then
+    attendanceTimer = 0
+    LeafVE:TrackAttendance()
+  end
+end)
+
+local badgeSyncTimer = 0
+
+local updateFrame = CreateFrame("Frame")
+updateFrame:SetScript("OnUpdate", function()
+  groupCheckTimer = groupCheckTimer + arg1
+  notificationTimer = notificationTimer + arg1
+  attendanceTimer = attendanceTimer + arg1
   badgeSyncTimer = badgeSyncTimer + arg1
-  pointsSyncTimer = pointsSyncTimer + arg1
   
   if groupCheckTimer >= 30 then
     groupCheckTimer = 0
@@ -3805,49 +4192,11 @@ updateFrame:SetScript("OnUpdate", function()
       LeafVE:BroadcastBadges()
     end
   end
-  
-  -- Sync points every 5 minutes
-  if pointsSyncTimer >= 300 then
-    pointsSyncTimer = 0
-    if InGuild() then
-      LeafVE:BroadcastPoints()
-    end
-  end
 end)
 
 -------------------------------------------------
 -- SLASH COMMANDS
 -------------------------------------------------
-
-SLASH_POINTSSYNC1 = "/pointssync"
-SlashCmdList["POINTSSYNC"] = function()
-  LeafVE:BroadcastPoints()
-  Print("Broadcasting points to guild...")
-end
-
-SLASH_TESTCOMMS1 = "/testcomms"
-SlashCmdList["TESTCOMMS"] = function()
-  Print("=== TESTING ADDON COMMUNICATION ===")
-  
-  if InGuild() then
-    Print("✓ In guild")
-  else
-    Print("✗ NOT in guild!")
-    return
-  end
-  
-  Print("Attempting to send test message...")
-  
-  local success = SendAddonMessage("LeafVE", "TEST:hello", "GUILD")
-  if success then
-    Print("✓ SendAddonMessage returned success")
-  else
-    Print("✗ SendAddonMessage FAILED")
-  end
-  
-  Print("If you don't see 'Received TEST' below in 1 second, addon comms are broken!")
-  Print("===================================")
-end
 
 SLASH_NOTESYNC1 = "/notesync"
 SlashCmdList["NOTESYNC"] = function()
