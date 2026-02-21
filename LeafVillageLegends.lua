@@ -49,37 +49,38 @@ local THEME = {
 }
 
 BADGES = {
-  -- Social & Participation
-  {id = "first_steps", name = "First Steps", desc = "Join the guild", icon = "Interface\\Icons\\INV_Misc_Medal_01"},
-  {id = "team_player", name = "Team Player", desc = "Run 50 dungeons with guildmates", icon = "Interface\\Icons\\INV_Banner_02"},
-  {id = "generous_spirit", name = "Generous Spirit", desc = "Donate 1000g to the guild bank", icon = "Interface\\Icons\\Spell_Holy_GreaterBlessingofKings"},
-  {id = "social_butterfly", name = "Social Butterfly", desc = "Complete 100 guild groups", icon = "Interface\\Icons\\INV_Misc_Star_01"},
+  -- Login & Activity (AUTO-TRACKED)
+  {id = "first_login", name = "First Steps", desc = "Earn your first login point", icon = "Interface\\Icons\\INV_Misc_Ribbon_01", category = "Activity"},
+  {id = "login_streak_7", name = "Dedicated", desc = "Login 7 days in a row", icon = "Interface\\Icons\\Spell_Holy_SealOfWisdom", category = "Activity"},
+  {id = "login_streak_30", name = "Truly Dedicated", desc = "Login 30 days in a row", icon = "Interface\\Icons\\INV_Helmet_66", category = "Activity"},
+  {id = "total_logins_100", name = "Regular", desc = "Earn 100 login points", icon = "Interface\\Icons\\Spell_Arcane_TeleportIronForge", category = "Activity"},
   
-  -- Combat & Achievement
-  {id = "dungeon_master", name = "Dungeon Master", desc = "Complete all level 60 dungeons", icon = "Interface\\Icons\\INV_Crown_01"},
-  {id = "raid_veteran", name = "Raid Veteran", desc = "Clear Molten Core", icon = "Interface\\Icons\\Spell_Fire_Immolation"},
-  {id = "pvp_champion", name = "PvP Champion", desc = "Reach Rank 10", icon = "Interface\\Icons\\Ability_Warrior_ShieldWall"},
-  {id = "world_boss_slayer", name = "World Boss Slayer", desc = "Kill all world bosses", icon = "Interface\\Icons\\INV_Misc_Head_Dragon_Black"},
+  -- Group Content (AUTO-TRACKED)
+  {id = "first_group", name = "Team Player", desc = "Complete your first guild group", icon = "Interface\\Icons\\INV_Banner_02", category = "Social"},
+  {id = "group_10", name = "Groupie", desc = "Complete 10 guild groups", icon = "Interface\\Icons\\INV_Misc_Gift_02", category = "Social"},
+  {id = "group_50", name = "Social Butterfly", desc = "Complete 50 guild groups", icon = "Interface\\Icons\\INV_Banner_01", category = "Social"},
+  {id = "group_100", name = "Guild Hero", desc = "Complete 100 guild groups", icon = "Interface\\Icons\\INV_Crown_01", category = "Social"},
   
-  -- Dedication & Time
-  {id = "dedicated", name = "Dedicated", desc = "Login 30 days in a row", icon = "Interface\\Icons\\INV_Misc_Medal_02"},
-  {id = "veteran", name = "Veteran", desc = "Be in the guild for 1 year", icon = "Interface\\Icons\\INV_Misc_Trophy_01"},
-  {id = "always_online", name = "Always Online", desc = "500 hours played while guilded", icon = "Interface\\Icons\\Spell_Arcane_ArcaneResilience"},
+  -- Shoutouts (AUTO-TRACKED)
+  {id = "first_shoutout_given", name = "Generous Soul", desc = "Give your first shoutout", icon = "Interface\\Icons\\INV_Letter_15", category = "Recognition"},
+  {id = "first_shoutout_received", name = "Recognized", desc = "Receive your first shoutout", icon = "Interface\\Icons\\INV_Misc_Note_01", category = "Recognition"},
+  {id = "shoutout_received_10", name = "Well Known", desc = "Receive 10 shoutouts", icon = "Interface\\Icons\\Spell_Holy_GreaterBlessingofKings", category = "Recognition"},
+  {id = "shoutout_received_50", name = "Guild Celebrity", desc = "Receive 50 shoutouts", icon = "Interface\\Icons\\INV_Crown_02", category = "Recognition"},
   
-  -- Crafting & Economy
-  {id = "master_crafter", name = "Master Crafter", desc = "Reach max level in 3 professions", icon = "Interface\\Icons\\INV_Hammer_04"},
-  {id = "market_tycoon", name = "Market Tycoon", desc = "Earn 10,000g through the AH", icon = "Interface\\Icons\\INV_Misc_Trophy_03"},
-  {id = "material_provider", name = "Material Provider", desc = "Donate 1000 materials to guild", icon = "Interface\\Icons\\INV_Misc_EngGizmos_02"},
+  -- Point Milestones (AUTO-TRACKED)
+  {id = "total_25", name = "Getting Started", desc = "Earn 25 total points", icon = "Interface\\Icons\\INV_Misc_Coin_01", category = "Milestones"},
+  {id = "total_100", name = "Contributor", desc = "Earn 100 total points", icon = "Interface\\Icons\\INV_Misc_Coin_05", category = "Milestones"},
+  {id = "total_500", name = "Core Member", desc = "Earn 500 total points", icon = "Interface\\Icons\\INV_Jewelry_Talisman_07", category = "Milestones"},
+  {id = "total_1000", name = "Guild Legend", desc = "Earn 1000 total points", icon = "Interface\\Icons\\INV_Misc_Head_Dragon_Red", category = "Milestones"},
   
-  -- Support & Leadership
-  {id = "guild_mentor", name = "Guild Mentor", desc = "Help 10 new members reach 60", icon = "Interface\\Icons\\Spell_Holy_AuraOfLight"},
-  {id = "recruitment_hero", name = "Recruitment Hero", desc = "Recruit 10 active members", icon = "Interface\\Icons\\INV_Banner_03"},
-  {id = "officer_excellence", name = "Officer Excellence", desc = "Serve as officer for 6 months", icon = "Interface\\Icons\\INV_Crown_02"},
+  -- Attendance (AUTO-TRACKED if in raids)
+  {id = "attendance_10", name = "Raider", desc = "Attend 10 raids", icon = "Interface\\Icons\\Spell_Fire_Immolation", category = "Raids"},
+  {id = "attendance_50", name = "Raid Veteran", desc = "Attend 50 raids", icon = "Interface\\Icons\\INV_Misc_Head_Dragon_Black", category = "Raids"},
   
-  -- Special & Elite
-  {id = "guild_legend", name = "Guild Legend", desc = "Complete all other badges", icon = "Interface\\Icons\\INV_Misc_Head_Dragon_Red"},
-  {id = "server_first", name = "Server First", desc = "Guild achieves a server first", icon = "Interface\\Icons\\INV_Misc_Star_02"},
-  {id = "hardcore_survivor", name = "Hardcore Survivor", desc = "Reach 60 without dying", icon = "Interface\\Icons\\INV_Misc_Bone_Skull_01"},
+  -- Time-based (AUTO-TRACKED)
+  {id = "guild_age_30", name = "One Month Strong", desc = "Be in guild for 30 days", icon = "Interface\\Icons\\INV_Helmet_66", category = "Loyalty"},
+  {id = "guild_age_90", name = "Three Month Veteran", desc = "Be in guild for 90 days", icon = "Interface\\Icons\\INV_Shield_06", category = "Loyalty"},
+  {id = "guild_age_365", name = "One Year Legend", desc = "Be in guild for 1 year", icon = "Interface\\Icons\\Ability_Creature_Cursed_02", category = "Loyalty"},
 }
 
 LeafVE.guildRosterCache = {}
@@ -416,20 +417,108 @@ function LeafVE:CheckAndAwardBadge(playerName, badgeId)
 end
 
 function LeafVE:CheckBadgeMilestones(playerName)
-  EnsureDB() playerName = ShortName(playerName) if not playerName then return end
+  EnsureDB()
+  playerName = ShortName(playerName)
+  if not playerName then return end
+  
+  -- Get player data
   local alltime = LeafVE_DB.alltime[playerName] or {L = 0, G = 0, S = 0}
   local totalPoints = (alltime.L or 0) + (alltime.G or 0) + (alltime.S or 0)
-  if alltime.L >= 1 then self:CheckAndAwardBadge(playerName, "first_login") end
-  if alltime.G >= 1 then self:CheckAndAwardBadge(playerName, "first_group") end
-  if alltime.G >= 10 then self:CheckAndAwardBadge(playerName, "group_10") end
-  if alltime.G >= 50 then self:CheckAndAwardBadge(playerName, "group_50") end
-  if totalPoints >= 25 then self:CheckAndAwardBadge(playerName, "total_25") end
-  if totalPoints >= 100 then self:CheckAndAwardBadge(playerName, "total_100") end
-  if totalPoints >= 500 then self:CheckAndAwardBadge(playerName, "total_500") end
+  
+  -- === LOGIN & ACTIVITY ===
+  if alltime.L >= 1 then 
+    self:CheckAndAwardBadge(playerName, "first_login") 
+  end
+  if alltime.L >= 100 then 
+    self:CheckAndAwardBadge(playerName, "total_logins_100") 
+  end
+  
+  -- Login streaks (check if you have streak tracking)
+  if LeafVE_DB.loginStreaks and LeafVE_DB.loginStreaks[playerName] then
+    local streak = LeafVE_DB.loginStreaks[playerName].current or 0
+    if streak >= 7 then 
+      self:CheckAndAwardBadge(playerName, "login_streak_7") 
+    end
+    if streak >= 30 then 
+      self:CheckAndAwardBadge(playerName, "login_streak_30") 
+    end
+  end
+  
+  -- === GROUP CONTENT ===
+  if alltime.G >= 1 then 
+    self:CheckAndAwardBadge(playerName, "first_group") 
+  end
+  if alltime.G >= 10 then 
+    self:CheckAndAwardBadge(playerName, "group_10") 
+  end
+  if alltime.G >= 50 then 
+    self:CheckAndAwardBadge(playerName, "group_50") 
+  end
+  if alltime.G >= 100 then 
+    self:CheckAndAwardBadge(playerName, "group_100") 
+  end
+  
+  -- === SHOUTOUTS ===
+  -- Count shoutouts received
+  local shoutsReceived = 0
+  for giver, shoutouts in pairs(LeafVE_DB.shoutouts) do
+    for target, timestamp in pairs(shoutouts) do
+      if Lower(target) == Lower(playerName) then
+        shoutsReceived = shoutsReceived + 1
+      end
+    end
+  end
+  
+  if shoutsReceived >= 1 then 
+    self:CheckAndAwardBadge(playerName, "first_shoutout_received") 
+  end
+  if shoutsReceived >= 10 then 
+    self:CheckAndAwardBadge(playerName, "shoutout_received_10") 
+  end
+  if shoutsReceived >= 50 then 
+    self:CheckAndAwardBadge(playerName, "shoutout_received_50") 
+  end
+  
+  -- === POINT MILESTONES ===
+  if totalPoints >= 25 then 
+    self:CheckAndAwardBadge(playerName, "total_25") 
+  end
+  if totalPoints >= 100 then 
+    self:CheckAndAwardBadge(playerName, "total_100") 
+  end
+  if totalPoints >= 500 then 
+    self:CheckAndAwardBadge(playerName, "total_500") 
+  end
+  if totalPoints >= 1000 then 
+    self:CheckAndAwardBadge(playerName, "total_1000") 
+  end
+  
+  -- === RAID ATTENDANCE ===
   local attendance = LeafVE_DB.attendance[playerName] or {}
   local attendCount = table.getn(attendance)
-  if attendCount >= 10 then self:CheckAndAwardBadge(playerName, "attendance_10") end
-  if attendCount >= 50 then self:CheckAndAwardBadge(playerName, "attendance_50") end
+  if attendCount >= 10 then 
+    self:CheckAndAwardBadge(playerName, "attendance_10") 
+  end
+  if attendCount >= 50 then 
+    self:CheckAndAwardBadge(playerName, "attendance_50") 
+  end
+  
+  -- === GUILD LOYALTY (Time-based) ===
+  -- You'll need to track guild join date - add this to your DB when someone joins
+  if LeafVE_DB.guildJoinDate and LeafVE_DB.guildJoinDate[playerName] then
+    local joinDate = LeafVE_DB.guildJoinDate[playerName]
+    local daysInGuild = math.floor((Now() - joinDate) / SECONDS_PER_DAY)
+    
+    if daysInGuild >= 30 then 
+      self:CheckAndAwardBadge(playerName, "guild_age_30") 
+    end
+    if daysInGuild >= 90 then 
+      self:CheckAndAwardBadge(playerName, "guild_age_90") 
+    end
+    if daysInGuild >= 365 then 
+      self:CheckAndAwardBadge(playerName, "guild_age_365") 
+    end
+  end
 end
 
 function LeafVE:GetPlayerBadges(playerName)
@@ -1084,7 +1173,7 @@ self.cardRecentBadgeFrames = {}
   local viewAllBadgesBtn = CreateFrame("Button", nil, c, "UIPanelButtonTemplate")
   viewAllBadgesBtn:SetWidth(140)
   viewAllBadgesBtn:SetHeight(22)
-  viewAllBadgesBtn:SetPoint("TOPLEFT", recentBadgesFrame, "BOTTOMLEFT", 0, -10)
+  viewAllBadgesBtn:SetPoint("TOPLEFT", recentBadgesFrame, "BOTTOMLEFT", 0, 10)
   viewAllBadgesBtn:SetText("View All Badges")
   SkinButtonAccent(viewAllBadgesBtn)
   viewAllBadgesBtn:SetScript("OnClick", function()
@@ -1194,18 +1283,18 @@ end)
   self.cardSaveNoteBtn = saveNoteBtn
 
   -- Leaf Village Emblem with BIG BRIGHT GLOW
-  local leafGlow = c:CreateTexture(nil, "BACKGROUND")
-  leafGlow:SetWidth(128)  -- ← DOUBLED from 64
-  leafGlow:SetHeight(128)
-  leafGlow:SetPoint("CENTER", c, "CENTER", 0, -50)
+local leafGlow = c:CreateTexture(nil, "BACKGROUND")
+leafGlow:SetWidth(128)
+leafGlow:SetHeight(128)
+leafGlow:SetPoint("CENTER", c, "CENTER", 0, -380)  -- Centered between left and right sections
   leafGlow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
   leafGlow:SetVertexColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3], 1.0)  -- ← FULL BRIGHTNESS (was 0.6)
   leafGlow:SetBlendMode("ADD")
   
-  local leafEmblem = c:CreateTexture(nil, "ARTWORK")
-  leafEmblem:SetWidth(48)  -- ← BIGGER (was 32)
-  leafEmblem:SetHeight(48)
-  leafEmblem:SetPoint("CENTER", c, "CENTER", 0, -50)
+local leafEmblem = c:CreateTexture(nil, "ARTWORK")
+leafEmblem:SetWidth(48)
+leafEmblem:SetHeight(48)
+leafEmblem:SetPoint("CENTER", c, "CENTER", 0, -125)  -- Same position
   leafEmblem:SetTexture("Interface\\Icons\\INV_Misc_Herb_8")
   leafEmblem:SetVertexColor(THEME.leaf[1], THEME.leaf[2], THEME.leaf[3], 1.0)
 
@@ -1242,34 +1331,55 @@ function LeafVE.UI:ShowAllBadgesPanel(playerName)
   end
 
   -- Create main frame
-  if not self.allBadgesFrame then
-    local f = CreateFrame("Frame", "LeafVEAllBadgesFrame", UIParent)
-    f:SetWidth(700)
-    f:SetHeight(550)
-    f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+if LeafVE.UI.frame then
+  f:SetHeight(LeafVE.UI.frame:GetHeight())
+else
+  f:SetHeight(550)
+end
+  
+  -- Anchor to right side of main UI panel
+  if LeafVE.UI.frame then
+    f:SetPoint("TOPLEFT", LeafVE.UI.frame, "TOPRIGHT", 5, 0)
+  else
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)  -- Fallback if main UI not open
+  end
     f:SetFrameStrata("DIALOG")
     f:EnableMouse(true)
     f:SetMovable(true)
     f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetScript("OnDragStart", function() this:StartMoving() end)
+    f:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
     f:SetClampedToScreen(true)
+    
+    -- Backdrop
+    f:SetBackdrop({
+      bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+      edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+      tile = true,
+      tileSize = 32,
+      edgeSize = 32,
+      insets = { left = 11, right = 12, top = 12, bottom = 11 }
+    })
+    f:SetBackdropColor(0, 0, 0, 1)
     
     -- Title
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    f.title:SetPoint("TOP", f, "TOP", 0, -5)
+    f.title:SetPoint("TOP", f, "TOP", 0, -15)
     
-    -- Close button (already exists from BasicFrameTemplateWithInset)
+    -- Close button
+    local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -5, -5)
+    closeBtn:SetScript("OnClick", function() this:GetParent():Hide() end)
     
     -- Scroll Frame
     local scrollFrame = CreateFrame("ScrollFrame", "LeafVEAllBadgesScrollFrame", f, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", f.InsetBg or f, "TOPLEFT", 10, -40)
-    scrollFrame:SetPoint("BOTTOMRIGHT", f.InsetBg or f, "BOTTOMRIGHT", -30, 10)
+    scrollFrame:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -50)
+    scrollFrame:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -30, 20)
     
     -- Content Frame
-    local content = CreateFrame("Frame", nil, scrollFrame)
-    content:SetWidth(scrollFrame:GetWidth())
-    content:SetHeight(1) -- Will be updated dynamically
+local content = CreateFrame("Frame", nil, scrollFrame)
+content:SetWidth(400)  -- Fixed width for consistency
+    content:SetHeight(1)
     scrollFrame:SetScrollChild(content)
     
     f.scrollFrame = scrollFrame
@@ -1353,15 +1463,17 @@ end
     -- Display badges in grid
     local xOffset = 10
     local col = 0
-    local maxCols = 5
+    local maxCols = 4
     local iconSize = 50
     local spacing = 10
     
-    for _, badgeData in ipairs(categories[category]) do
-      local icon = CreateFrame("Frame", nil, content)
-      icon:SetWidth(iconSize)
-      icon:SetHeight(iconSize)
-      icon:SetPoint("TOPLEFT", content, "TOPLEFT", xOffset, yOffset)
+for _, badgeData in ipairs(categories[category]) do
+  local icon = CreateFrame("Frame", nil, content)
+  icon:SetWidth(iconSize)
+  icon:SetHeight(iconSize)
+  icon:SetPoint("TOPLEFT", content, "TOPLEFT", xOffset, yOffset)
+  
+  icon:EnableMouse(true)  -- ← ADD THIS LINE!
       
       -- Badge texture
       local tex = icon:CreateTexture(nil, "ARTWORK")
@@ -1380,24 +1492,43 @@ end
       border:SetTexCoord(0, 0.5625, 0, 0.5625)
       
       --- Tooltip
+-- Store badge data on icon for tooltip
+icon.badgeName = badgeData.name
+icon.badgeDesc = badgeData.description
+icon.badgeEarned = badgeData.earned
+icon.badgeEarnedDate = badgeData.earnedDate
+
+-- Store badge data on icon for tooltip
+icon.badgeName = badgeData.name
+icon.badgeDesc = badgeData.description
+icon.badgeEarned = badgeData.earned
+icon.badgeEarnedDate = badgeData.earnedDate
+
+-- Tooltip
 icon:SetScript("OnEnter", function()
   GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-  GameTooltip:SetText(this.badgeName, 1, 1, 1)
-  GameTooltip:AddLine(this.badgeDesc, nil, nil, nil, true)
-  if this.earned and this.earnedDate then
+  GameTooltip:ClearLines()
+  
+  if this.badgeEarned then
+    GameTooltip:SetText(this.badgeName, THEME.gold[1], THEME.gold[2], THEME.gold[3], 1, true)
+    GameTooltip:AddLine(this.badgeDesc, 1, 1, 1, true)
+    if this.badgeEarnedDate then
+      GameTooltip:AddLine(" ", 1, 1, 1)
+      GameTooltip:AddLine("Earned: " .. date("%m/%d/%Y", this.badgeEarnedDate), 0.5, 0.8, 0.5)
+    end
+  else
+    GameTooltip:SetText(this.badgeName, 0.6, 0.6, 0.6, 1, true)
+    GameTooltip:AddLine(this.badgeDesc, 0.7, 0.7, 0.7, true)
     GameTooltip:AddLine(" ", 1, 1, 1)
-    GameTooltip:AddLine("Earned: " .. date("%m/%d/%Y", this.earnedDate), 0.5, 0.5, 0.5)
-  elseif not this.earned then
-    GameTooltip:AddLine(" ", 1, 1, 1)
-    GameTooltip:AddLine("Not yet earned", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Not yet earned", 0.8, 0.4, 0.4)
   end
+  
   GameTooltip:Show()
 end)
 
 icon:SetScript("OnLeave", function()
   GameTooltip:Hide()
-end)
-      
+end)  
       table.insert(f.badgeIcons, icon)
       
       col = col + 1
