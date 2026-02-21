@@ -866,11 +866,48 @@ function LeafVE:BroadcastPlayerNote(noteText)
 end
 
 function LeafVE:OnAddonMessage(prefix, message, channel, sender)
-  if prefix ~= "LeafVE" then return end
+  -- Accept both LeafVE and LEAFVE_LB prefixes
+  if prefix ~= "LeafVE" and prefix ~= "LEAFVE_LB" then return end
   if channel ~= "GUILD" then return end
   
   sender = ShortName(sender)
   if not sender then return end
+  
+  -- Handle LEAFVE_LB prefix (new leaderboard sync format)
+  if prefix == "LEAFVE_LB" then
+    -- Parse multiple entries separated by |
+    local startPos = 1
+    while startPos <= string.len(message) do
+      local pipePos = string.find(message, "|", startPos)
+      local entry
+      
+      if pipePos then
+        entry = string.sub(message, startPos, pipePos - 1)
+        startPos = pipePos + 1
+      else
+        entry = string.sub(message, startPos)
+        startPos = string.len(message) + 1
+      end
+      
+      if string.len(entry) > 0 then
+        LeafVE:ReceiveLeaderboardData(sender, entry)
+      end
+    end
+    
+    -- Refresh leaderboards if open
+    if LeafVE.UI and LeafVE.UI.panels then
+      if LeafVE.UI.panels.weeklyLeaderboard then
+        LeafVE.UI:RefreshLeaderboard("weeklyLeaderboard")
+      end
+      if LeafVE.UI.panels.lifetimeLeaderboard then
+        LeafVE.UI:RefreshLeaderboard("lifetimeLeaderboard")
+      end
+    end
+    
+    return
+  end
+  
+  -- Handle LeafVE prefix (existing badge/note messages)
   
   -- Parse badge sync message
   if string.sub(message, 1, 7) == "BADGES:" then
@@ -943,40 +980,7 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
     end
     
     return
-    
-    -- **NEW: Parse leaderboard sync message**
-  elseif string.sub(message, 1, 7) == "LBOARD:" then
-    local lboardData = string.sub(message, 8)
-    
-    -- Parse comma-separated player entries
-    local startPos = 1
-    while startPos <= string.len(lboardData) do
-      local commaPos = string.find(lboardData, ",", startPos)
-      local playerEntry
-      
-      if commaPos then
-        playerEntry = string.sub(lboardData, startPos, commaPos - 1)
-        startPos = commaPos + 1
-      else
-        playerEntry = string.sub(lboardData, startPos)
-        startPos = string.len(lboardData) + 1
-      end
-      
-      LeafVE:ReceiveLeaderboardData(sender, playerEntry)
-    end  -- ← CLOSE THE WHILE LOOP
-    
-    -- Refresh leaderboards if open
-    if LeafVE.UI and LeafVE.UI.panels then
-      if LeafVE.UI.panels.leaderLife and LeafVE.UI.panels.leaderLife:IsVisible() then
-        LeafVE.UI:RefreshLeaderboard("leaderLife")
-      end
-      if LeafVE.UI.panels.leaderWeek and LeafVE.UI.panels.leaderWeek:IsVisible() then
-        LeafVE.UI:RefreshLeaderboard("leaderWeek")
-      end
-    end
-    
-    return
-  end  -- ← CLOSE THE OnAddonMessage FUNCTION
+  end
 end
       
       function LeafVE:ReceiveLeaderboardData(sender, playerData)
@@ -1038,7 +1042,7 @@ end
       Print("Updated weekly data for "..playerName..": L="..L.." G="..G.." S="..S)
     end
   end
-
+end
 function FindUnitToken(playerName)
   if UnitName("player") == playerName then return "player" end
   if UnitExists("target") and UnitName("target") == playerName then return "target" end
@@ -4449,7 +4453,6 @@ local notificationTimer = 0
 local attendanceTimer = 0
 local badgeSyncTimer = 0
 
-ef:SetScript("OnEvent", function()
   if event == "ADDON_LOADED" and arg1 == LeafVE.name then
     EnsureDB()
     
@@ -4457,6 +4460,7 @@ ef:SetScript("OnEvent", function()
     if RegisterAddonMessagePrefix then
       RegisterAddonMessagePrefix("LeafVE")
       RegisterAddonMessagePrefix("LeafVEAch")
+      RegisterAddonMessagePrefix("LEAFVE_LB")  -- ← ADD THIS LINE
       Print("Registered addon message prefixes")
     else
       Print("Warning: RegisterAddonMessagePrefix not available!")
