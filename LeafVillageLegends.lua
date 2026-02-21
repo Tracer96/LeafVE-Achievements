@@ -281,6 +281,18 @@ local function EnsureDB()
   if not LeafVE_DB.loginStreaks then LeafVE_DB.loginStreaks = {} end
   if not LeafVE_DB.persistentRoster then LeafVE_DB.persistentRoster = {} end
   if not LeafVE_DB.lboard then LeafVE_DB.lboard = { alltime = {}, weekly = {}, updatedAt = {} } end
+  -- Ensure sub-tables exist (migration: older versions may not have all sub-tables)
+  if not LeafVE_DB.lboard.alltime then LeafVE_DB.lboard.alltime = {} end
+  if not LeafVE_DB.lboard.weekly then LeafVE_DB.lboard.weekly = {} end
+  if not LeafVE_DB.lboard.updatedAt then LeafVE_DB.lboard.updatedAt = {} end
+  -- Migrate: older code stored updatedAt[name] as a plain timestamp number; now it must be a table
+  for k, v in pairs(LeafVE_DB.lboard.updatedAt) do
+    if type(v) == "number" then LeafVE_DB.lboard.updatedAt[k] = { lifetime = v } end
+  end
+  -- Migrate: ensure weekly[wk] entries are tables, not numbers
+  for wk, v in pairs(LeafVE_DB.lboard.weekly) do
+    if type(v) ~= "table" then LeafVE_DB.lboard.weekly[wk] = {} end
+  end
   if LeafVE_DB.ui.w == nil then LeafVE_DB.ui.w = 950 end
   if LeafVE_DB.ui.h == nil then LeafVE_DB.ui.h = 660 end
   if LeafVE_DB.options.officerRankThreshold == nil then LeafVE_DB.options.officerRankThreshold = 4 end
@@ -1032,7 +1044,9 @@ end
   local now = Now()
   if dataType == "L" then
     -- Lifetime synced data: only overwrite if newer than what we have
-    local existing = LeafVE_DB.lboard.updatedAt[playerName] and LeafVE_DB.lboard.updatedAt[playerName].lifetime
+    local upd = LeafVE_DB.lboard.updatedAt[playerName]
+    if type(upd) ~= "table" then upd = nil end
+    local existing = upd and upd.lifetime
     if not existing or now > existing then
       LeafVE_DB.lboard.alltime[playerName] = {L = L, G = G, S = S}
       if not LeafVE_DB.lboard.updatedAt[playerName] then LeafVE_DB.lboard.updatedAt[playerName] = {} end
@@ -1047,9 +1061,11 @@ end
     local currentWk = WeekKey()
     if wk ~= currentWk then return end
     -- Freshness guard: only overwrite if newer than what we have for this week
-    local existingWeekAt = LeafVE_DB.lboard.updatedAt[playerName] and LeafVE_DB.lboard.updatedAt[playerName]["week_"..wk]
+    local updW = LeafVE_DB.lboard.updatedAt[playerName]
+    if type(updW) ~= "table" then updW = nil end
+    local existingWeekAt = updW and updW["week_"..wk]
     if not existingWeekAt or now > existingWeekAt then
-      if not LeafVE_DB.lboard.weekly[wk] then LeafVE_DB.lboard.weekly[wk] = {} end
+      if type(LeafVE_DB.lboard.weekly[wk]) ~= "table" then LeafVE_DB.lboard.weekly[wk] = {} end
       LeafVE_DB.lboard.weekly[wk][playerName] = {L = L, G = G, S = S}
       if not LeafVE_DB.lboard.updatedAt[playerName] then LeafVE_DB.lboard.updatedAt[playerName] = {} end
       LeafVE_DB.lboard.updatedAt[playerName]["week_"..wk] = now
