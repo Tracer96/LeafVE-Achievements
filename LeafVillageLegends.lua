@@ -812,29 +812,62 @@ function LeafVE:BroadcastBadges()
   end
 end
 
-function LeafVE:BroadcastBadges()
+function LeafVE:BroadcastLeaderboardData()
   if not InGuild() then return end
   
   local me = ShortName(UnitName("player"))
   if not me then return end
   
   EnsureDB()
-  local myBadges = LeafVE_DB.badges[me] or {}
   
-  -- Build compressed badge list: "badgeID:timestamp,badgeID:timestamp,..."
-  local badgeData = {}
-  for badgeId, timestamp in pairs(myBadges) do
-    table.insert(badgeData, badgeId..":"..timestamp)
-  end
+  -- Build a compressed leaderboard snapshot
+  local data = {}
   
-  if table.getn(badgeData) > 0 then
-    local message = table.concat(badgeData, ",")
-    SendAddonMessage("LeafVE", "BADGES:"..message, "GUILD")
-    Print("Broadcast "..table.getn(badgeData).." badges to guild")
-  end
+  -- Add my lifetime stats
+  local myAlltime = LeafVE_DB.alltime[me] or {L = 0, G = 0, S = 0}
+  table.insert(data, string.format("%s:%d:%d:%d", me, myAlltime.L or 0, myAlltime.G or 0, myAlltime.S or 0))
+  
+  -- Compress and send (format: "PlayerName:L:G:S,PlayerName:L:G:S")
+  local message = table.concat(data, ",")
+  
+  SendAddonMessage("LeafVE", "LBOARD:"..message, "GUILD")
+  Print("Broadcasted leaderboard data")
 end
 
--- **ADD THIS FUNCTION HERE (Step 3)**
+function LeafVE:ReceiveLeaderboardData(sender, playerData)
+  EnsureDB()
+  
+  -- Parse "PlayerName:L:G:S"
+  local colonPos1 = string.find(playerData, ":")
+  if not colonPos1 then return end
+  
+  local playerName = string.sub(playerData, 1, colonPos1 - 1)
+  local rest = string.sub(playerData, colonPos1 + 1)
+  
+  local colonPos2 = string.find(rest, ":")
+  if not colonPos2 then return end
+  
+  local L = tonumber(string.sub(rest, 1, colonPos2 - 1)) or 0
+  local rest2 = string.sub(rest, colonPos2 + 1)
+  
+  local colonPos3 = string.find(rest2, ":")
+  if not colonPos3 then return end
+  
+  local G = tonumber(string.sub(rest2, 1, colonPos3 - 1)) or 0
+  local S = tonumber(string.sub(rest2, colonPos3 + 1)) or 0
+  
+  -- Update database
+  if not LeafVE_DB.alltime[playerName] then
+    LeafVE_DB.alltime[playerName] = {L = 0, G = 0, S = 0}
+  end
+  
+  LeafVE_DB.alltime[playerName].L = L
+  LeafVE_DB.alltime[playerName].G = G
+  LeafVE_DB.alltime[playerName].S = S
+  
+  Print("Updated leaderboard: "..playerName.." (L:"..L.." G:"..G.." S:"..S..")")
+end
+
 function LeafVE:BroadcastPlayerNote(noteText)
   if not InGuild() then return end
   
@@ -848,10 +881,6 @@ function LeafVE:BroadcastPlayerNote(noteText)
   
   SendAddonMessage("LeafVE", "NOTE:"..noteText, "GUILD")
   Print("Broadcast player note to guild")
-end
-
-function LeafVE:OnAddonMessage(prefix, message, channel, sender)
-  -- ... existing code ...
 end
 
 function LeafVE:OnAddonMessage(prefix, message, channel, sender)
@@ -907,7 +936,9 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
       LeafVE.UI:UpdateCardRecentBadges(sender)
     end
     
-  -- **NEW: Parse player note sync message**
+    return
+    
+  -- Parse player note sync message
   elseif string.sub(message, 1, 5) == "NOTE:" then
     local noteText = string.sub(message, 6)
     
@@ -928,8 +959,44 @@ function LeafVE:OnAddonMessage(prefix, message, channel, sender)
         LeafVE.UI.cardNotesEdit:SetText(noteText)
       end
     end
+    
+    return
+    
+  -- **NEW: Parse leaderboard sync message**
+  elseif string.sub(message, 1, 7) == "LBOARD:" then
+    local lboardData = string.sub(message, 8)
+    
+    -- Parse comma-separated player entries
+    local startPos = 1
+    while startPos <= string.len(lboardData) do
+      local commaPos = string.find(lboardData, ",", startPos)
+      local playerEntry
+      
+      if commaPos then
+        playerEntry = string.sub(lboardData, startPos, commaPos - 1)
+        startPos = commaPos + 1
+      else
+        playerEntry = string.sub(lboardData, startPos)
+        startPos = string.len(lboardData) + 1
+      end
+      
+      LeafVE:ReceiveLeaderboardData(sender, playerEntry)
+    end
+    
+    -- Refresh leaderboards if open
+    if LeafVE.UI and LeafVE.UI.panels then
+      if LeafVE.UI.panels.leaderLife and LeafVE.UI.panels.leaderLife:IsVisible() then
+        LeafVE.UI:RefreshLeaderboard("leaderLife")
+      end
+      if LeafVE.UI.panels.leaderWeek and LeafVE.UI.panels.leaderWeek:IsVisible() then
+        LeafVE.UI:RefreshLeaderboard("leaderWeek")
+      end
+    end
+    
+    return
   end
 end
+
 function FindUnitToken(playerName)
   if UnitName("player") == playerName then return "player" end
   if UnitExists("target") and UnitName("target") == playerName then return "target" end
@@ -4113,20 +4180,17 @@ ef:SetScript("OnEvent", function()
     broadcastFrame:SetScript("OnUpdate", function()
       broadcastTimer = broadcastTimer + arg1
       if broadcastTimer >= 5 then
-        if InGuild() then
-          LeafVE:BroadcastBadges()
-          
-          -- **NEW: Broadcast player note**
-          local me = ShortName(UnitName("player"))
-          if me and LeafVE_GlobalDB.playerNotes and LeafVE_GlobalDB.playerNotes[me] then
-            LeafVE:BroadcastPlayerNote(LeafVE_GlobalDB.playerNotes[me])
-          end
-        end
-        broadcastFrame:SetScript("OnUpdate", nil)
-      end
-    end)
-    return
+  if InGuild() then
+    LeafVE:BroadcastBadges()
+    LeafVE:BroadcastLeaderboardData()  -- ← ADD THIS
+    
+    local me = ShortName(UnitName("player"))
+    if me and LeafVE_GlobalDB.playerNotes and LeafVE_GlobalDB.playerNotes[me] then
+      LeafVE:BroadcastPlayerNote(LeafVE_GlobalDB.playerNotes[me])
+    end
   end
+  broadcastFrame:SetScript("OnUpdate", nil)
+end
   
   if event == "CHAT_MSG_ADDON" then
     LeafVE:OnAddonMessage(arg1, arg2, arg3, arg4)
@@ -4190,13 +4254,20 @@ updateFrame:SetScript("OnUpdate", function()
     badgeSyncTimer = 0
     if InGuild() then
       LeafVE:BroadcastBadges()
+      LeafVE:BroadcastLeaderboardData()
     end
   end
-end)
+end)  -- ← THIS WAS MISSING!
 
 -------------------------------------------------
 -- SLASH COMMANDS
 -------------------------------------------------
+
+SLASH_LBOARDSYNC1 = "/lboardsync"
+SlashCmdList["LBOARDSYNC"] = function()
+  LeafVE:BroadcastLeaderboardData()
+  Print("Broadcasting leaderboard data to guild...")
+end
 
 SLASH_NOTESYNC1 = "/notesync"
 SlashCmdList["NOTESYNC"] = function()
