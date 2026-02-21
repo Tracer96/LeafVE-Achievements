@@ -2941,8 +2941,64 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
         pointsText:SetPoint("LEFT", nameText, "RIGHT", 10, 0)
         pointsText:SetWidth(250)
         pointsText:SetJustifyH("LEFT")
-        frame.pointsText =
-
+        frame.pointsText = pointsText
+        
+        local bg = frame:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(frame)
+        bg:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+        bg:SetVertexColor(0.1, 0.1, 0.1, 0.3)
+        frame.bg = bg
+        
+        table.insert(panel.leaderEntries, frame)
+      end
+      
+      frame:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 5, yOffset)
+      
+      local rankColor = {1, 1, 1}
+      
+      if i <= 3 and PVP_RANK_ICONS[i] then
+        frame.rankIcon:SetTexture(PVP_RANK_ICONS[i])
+        if frame.rankIcon:GetTexture() then
+          frame.rankIcon:Show()
+          frame.rank:Hide()
+        else
+          frame.rankIcon:Hide()
+          frame.rank:Show()
+          frame.rank:SetText("#"..i)
+          frame.rank:SetTextColor(rankColor[1], rankColor[2], rankColor[3])
+        end
+      else
+        frame.rankIcon:Hide()
+        frame.rank:Show()
+        frame.rank:SetText("#"..i)
+        frame.rank:SetTextColor(rankColor[1], rankColor[2], rankColor[3])
+      end
+      
+      local class = string.upper(leader.class or "UNKNOWN")
+      local classColor = CLASS_COLORS[class] or {1, 1, 1}
+      frame.nameText:SetText(leader.name)
+      frame.nameText:SetTextColor(classColor[1], classColor[2], classColor[3])
+      
+      frame.pointsText:SetText(string.format("|cFFFFD700%d pts|r  (L:%d G:%d S:%d)", leader.total, leader.L, leader.G, leader.S))
+      
+      frame:Show()
+      yOffset = yOffset - entryHeight - 3
+    end
+  end
+  
+  scrollChild:SetHeight(math.max(1, math.abs(yOffset) + 50))
+  
+  local scrollRange = panel.scrollFrame:GetVerticalScrollRange()
+  if scrollRange > 0 then
+    panel.scrollBar:Show()
+  else
+    panel.scrollBar:Hide()
+  end
+  
+  panel.scrollFrame:SetVerticalScroll(0)
+  panel.scrollBar:SetValue(0)
+end
+
 local function BuildRosterPanel(panel)
   -- Block header background
   local headerBG = panel:CreateTexture(nil, "BACKGROUND")
