@@ -826,9 +826,21 @@ function LeafVE:BroadcastLeaderboardData()
   local myAlltime = LeafVE_DB.alltime[me] or {L = 0, G = 0, S = 0}
   table.insert(data, string.format("L:%s:%d:%d:%d", me, myAlltime.L or 0, myAlltime.G or 0, myAlltime.S or 0))
   
-  -- Add my weekly stats
+  -- Add my weekly stats (always use fresh local data for yourself)
   local weekAgg = AggForThisWeek()
   local myWeek = weekAgg[me] or {L = 0, G = 0, S = 0}
+  
+  -- Update your own cache before broadcasting
+  if not LeafVE_DB.weeklyCache then
+    LeafVE_DB.weeklyCache = {}
+  end
+  LeafVE_DB.weeklyCache[me] = {
+    L = myWeek.L or 0,
+    G = myWeek.G or 0,
+    S = myWeek.S or 0,
+    lastUpdate = Now()
+  }
+  
   table.insert(data, string.format("W:%s:%d:%d:%d", me, myWeek.L or 0, myWeek.G or 0, myWeek.S or 0))
   
   -- Send message (format: "L:PlayerName:L:G:S,W:PlayerName:L:G:S")
@@ -1013,14 +1025,19 @@ end
     end
     
     if not LeafVE_DB.weeklyCache[playerName] then
-      LeafVE_DB.weeklyCache[playerName] = {L = 0, G = 0, S = 0}
+      LeafVE_DB.weeklyCache[playerName] = {L = 0, G = 0, S = 0, lastUpdate = 0}
     end
     
-    LeafVE_DB.weeklyCache[playerName].L = L
-    LeafVE_DB.weeklyCache[playerName].G = G
-    LeafVE_DB.weeklyCache[playerName].S = S
+    -- Only update if the received data is newer or different
+    local existing = LeafVE_DB.weeklyCache[playerName]
+    if L ~= existing.L or G ~= existing.G or S ~= existing.S then
+      LeafVE_DB.weeklyCache[playerName].L = L
+      LeafVE_DB.weeklyCache[playerName].G = G
+      LeafVE_DB.weeklyCache[playerName].S = S
+      LeafVE_DB.weeklyCache[playerName].lastUpdate = Now()
+      Print("Updated weekly data for "..playerName..": L="..L.." G="..G.." S="..S)
+    end
   end
-end
 
 function FindUnitToken(playerName)
   if UnitName("player") == playerName then return "player" end
@@ -2808,15 +2825,40 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
   
   local leaders = {}
   
- if isWeekly then
-  -- Use synced weekly cache if available, otherwise fall back to local data
-  local weekAgg = LeafVE_DB.weeklyCache or AggForThisWeek()
-  
-  for _, guildInfo in pairs(LeafVE.guildRosterCache) do
-    local name = guildInfo.name
-    local pts = weekAgg[name] or {L = 0, G = 0, S = 0}
-    local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
+  if isWeekly then
+    -- Merge cached weekly data with local live data
+    local weekAgg = AggForThisWeek()  -- Get local player's current week
+    
+    -- Initialize weeklyCache if needed
+    if not LeafVE_DB.weeklyCache then
+      LeafVE_DB.weeklyCache = {}
+    end
+    
+    -- Merge: use cached data for offline players, live data for local player
+    local me = ShortName(UnitName("player"))
+    
+    for _, guildInfo in pairs(LeafVE.guildRosterCache) do
+      local name = guildInfo.name
       
+      -- Use live data for yourself, cached for others
+      local pts
+      if name == me then
+        pts = weekAgg[name] or {L = 0, G = 0, S = 0}
+        
+        -- Update cache with your current data
+        LeafVE_DB.weeklyCache[name] = {
+          L = pts.L or 0,
+          G = pts.G or 0,
+          S = pts.S or 0,
+          lastUpdate = Now()
+        }
+      else
+        -- Use cached data for other players, fall back to live if not cached
+        pts = LeafVE_DB.weeklyCache[name] or weekAgg[name] or {L = 0, G = 0, S = 0}
+      end
+      
+      local total = (pts.L or 0) + (pts.G or 0) + (pts.S or 0)
+        
       table.insert(leaders, {
         name = name, total = total,
         L = pts.L or 0, G = pts.G or 0, S = pts.S or 0,
@@ -2824,6 +2866,7 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
       })
     end
   else
+    -- Lifetime leaderboard
     for _, guildInfo in pairs(LeafVE.guildRosterCache) do
       local name = guildInfo.name
       local pts = LeafVE_DB.alltime[name] or {L = 0, G = 0, S = 0}
@@ -2835,7 +2878,7 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
         class = guildInfo.class or "Unknown"
       })
     end
-  end
+  end  -- ← THIS WAS MISSING! Closes the "if isWeekly then"
   
   table.sort(leaders, function(a, b)
     if a.total == b.total then
@@ -2898,64 +2941,8 @@ function LeafVE.UI:RefreshLeaderboard(panelName)
         pointsText:SetPoint("LEFT", nameText, "RIGHT", 10, 0)
         pointsText:SetWidth(250)
         pointsText:SetJustifyH("LEFT")
-        frame.pointsText = pointsText
-        
-        local bg = frame:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints(frame)
-        bg:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
-        bg:SetVertexColor(0.1, 0.1, 0.1, 0.3)
-        frame.bg = bg
-        
-        table.insert(panel.leaderEntries, frame)
-      end
-      
-      frame:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 5, yOffset)
-      
-      local rankColor = {1, 1, 1}
-      
-      if i <= 3 and PVP_RANK_ICONS[i] then
-        frame.rankIcon:SetTexture(PVP_RANK_ICONS[i])
-        if frame.rankIcon:GetTexture() then
-          frame.rankIcon:Show()
-          frame.rank:Hide()
-        else
-          frame.rankIcon:Hide()
-          frame.rank:Show()
-          frame.rank:SetText("#"..i)
-          frame.rank:SetTextColor(rankColor[1], rankColor[2], rankColor[3])
-        end
-      else
-        frame.rankIcon:Hide()
-        frame.rank:Show()
-        frame.rank:SetText("#"..i)
-        frame.rank:SetTextColor(rankColor[1], rankColor[2], rankColor[3])
-      end
-      
-      local class = string.upper(leader.class or "UNKNOWN")
-      local classColor = CLASS_COLORS[class] or {1, 1, 1}
-      frame.nameText:SetText(leader.name)
-      frame.nameText:SetTextColor(classColor[1], classColor[2], classColor[3])
-      
-      frame.pointsText:SetText(string.format("|cFFFFD700%d pts|r  (L:%d G:%d S:%d)", leader.total, leader.L, leader.G, leader.S))
-      
-      frame:Show()
-      yOffset = yOffset - entryHeight - 3
-    end
-  end
-  
-  scrollChild:SetHeight(math.max(1, math.abs(yOffset) + 50))
-  
-  local scrollRange = panel.scrollFrame:GetVerticalScrollRange()
-  if scrollRange > 0 then
-    panel.scrollBar:Show()
-  else
-    panel.scrollBar:Hide()
-  end
-  
-  panel.scrollFrame:SetVerticalScroll(0)
-  panel.scrollBar:SetValue(0)
-end
-
+        frame.pointsText =
+
 local function BuildRosterPanel(panel)
   -- Block header background
   local headerBG = panel:CreateTexture(nil, "BACKGROUND")
@@ -3326,54 +3313,71 @@ local function BuildBadgesPanel(panel)
   subtitle:SetPoint("TOP", title, "BOTTOM", 0, -3)
   subtitle:SetText("|cFF888888Earn badges by completing milestones and challenges|r")
   
-  -- Scroll frame
+  -- Scroll frame (REBUILT)
   local scrollFrame = CreateFrame("ScrollFrame", nil, panel)
-  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 5, -45)
-  scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -25, 5)
+  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -70)
+  scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 12)
+  scrollFrame:EnableMouse(true)
+  scrollFrame:EnableMouseWheel(true)
   panel.scrollFrame = scrollFrame
   
   local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-  scrollChild:SetWidth(scrollFrame:GetWidth())
-  scrollChild:SetHeight(1)
+  scrollChild:SetWidth(400)
+  scrollChild:SetHeight(1500)  -- Start with tall height
   scrollFrame:SetScrollChild(scrollChild)
   panel.scrollChild = scrollChild
   
-  -- Scroll bar
-  local scrollBar = CreateFrame("Slider", nil, scrollFrame)
-  scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -5, -50)
-  scrollBar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -5, 10)
-  scrollBar:SetWidth(16)
-  scrollBar:SetOrientation("VERTICAL")
-  scrollBar:SetMinMaxValues(0, 100)
-  scrollBar:SetValue(0)
-  scrollBar:SetValueStep(1)
-  panel.scrollBar = scrollBar
-  
-  local scrollBg = scrollBar:CreateTexture(nil, "BACKGROUND")
-  scrollBg:SetAllPoints(scrollBar)
-  scrollBg:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
-  scrollBg:SetVertexColor(0.2, 0.2, 0.2, 0.8)
-  
-  local scrollThumb = scrollBar:CreateTexture(nil, "OVERLAY")
-  scrollThumb:SetWidth(16)
-  scrollThumb:SetHeight(30)
-  scrollThumb:SetTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
-  scrollBar:SetThumbTexture(scrollThumb)
-  
-  scrollBar:SetScript("OnValueChanged", function()
-    local val = this:GetValue()
-    scrollFrame:SetVerticalScroll(val)
+  -- Mouse wheel scrolling with proper bounds
+  scrollFrame:SetScript("OnMouseWheel", function()
+    local current = this:GetVerticalScroll()
+    local maxScroll = this:GetVerticalScrollRange()
+    local newScroll = current - (arg1 * 80)
+    
+    -- CLAMP to valid range
+    if newScroll < 0 then 
+      newScroll = 0 
+    elseif newScroll > maxScroll then 
+      newScroll = maxScroll 
+    end
+    
+    this:SetVerticalScroll(newScroll)
+    
+    -- Update scrollbar
+    if panel.scrollBar and maxScroll > 0 then
+      panel.scrollBar:SetValue((newScroll / maxScroll) * 100)
+    end
   end)
   
-  scrollFrame:SetScript("OnVerticalScroll", function()
-    local offset = arg1
-    local scrollRange = scrollFrame:GetVerticalScrollRange()
-    if scrollRange > 0 then
-      scrollBar:SetMinMaxValues(0, scrollRange)
-      scrollBar:SetValue(offset)
-      scrollBar:Show()
-    else
-      scrollBar:Hide()
+  -- Scroll bar
+  local scrollBar = CreateFrame("Slider", nil, panel)
+  scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -70)
+  scrollBar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 12)
+  scrollBar:SetWidth(16)
+  scrollBar:SetOrientation("VERTICAL")
+  scrollBar:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
+  scrollBar:SetMinMaxValues(0, 100)
+  scrollBar:SetValue(0)
+  panel.scrollBar = scrollBar
+  
+  local thumb = scrollBar:GetThumbTexture()
+  thumb:SetWidth(16)
+  thumb:SetHeight(24)
+  
+  scrollBar:SetBackdrop({
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 8, edgeSize = 8,
+    insets = {left = 2, right = 2, top = 2, bottom = 2}
+  })
+  scrollBar:SetBackdropColor(0, 0, 0, 0.3)
+  scrollBar:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+  
+  scrollBar:SetScript("OnValueChanged", function()
+    local value = this:GetValue()
+    local maxScroll = scrollFrame:GetVerticalScrollRange()
+    if maxScroll > 0 then
+      local targetScroll = (value / 100) * maxScroll
+      scrollFrame:SetVerticalScroll(targetScroll)
     end
   end)
   
@@ -3614,7 +3618,7 @@ function LeafVE.UI:RefreshBadges()
 
   scrollChild:ClearAllPoints()
   scrollChild:SetPoint("TOPLEFT", panel.scrollFrame, "TOPLEFT", 0, 0)
-  scrollChild:SetWidth(panel.scrollFrame:GetWidth() or 500)
+  scrollChild:SetWidth(400)  -- Fixed width
   scrollChild:Show()
 
   local yOffset = -10
@@ -3645,6 +3649,7 @@ function LeafVE.UI:RefreshBadges()
       panel.noBadgesText = noBadgesText
     end
     panel.noBadgesText:Show()
+    scrollChild:SetHeight(100)
   else
     if panel.noBadgesText then
       panel.noBadgesText:Hide()
@@ -3652,6 +3657,7 @@ function LeafVE.UI:RefreshBadges()
 
     local row = 0
     local col = 0
+    local lastYPos = yOffset  -- Track the last Y position
 
     for i = 1, table.getn(allBadges) do
       local badge = allBadges[i]
@@ -3661,8 +3667,6 @@ function LeafVE.UI:RefreshBadges()
         frame = CreateFrame("Frame", nil, scrollChild)
         frame:SetWidth(badgeSize)
         frame:SetHeight(badgeSize)
-        
-        -- ENABLE MOUSE INTERACTION (CRITICAL FOR TOOLTIPS!)
         frame:EnableMouse(true)
 
         local icon = frame:CreateTexture(nil, "ARTWORK")
@@ -3680,31 +3684,11 @@ function LeafVE.UI:RefreshBadges()
         table.insert(panel.badgeFrames, frame)
       end
       
-      -- Update tooltip scripts every refresh (in case badge data changes)
-      frame:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:ClearLines()
-        GameTooltip:SetText(this.badgeName, THEME.gold[1], THEME.gold[2], THEME.gold[3], 1, true)
-        GameTooltip:AddLine(this.badgeDesc, 1, 1, 1, true)
-        if this.earnedAt then
-          GameTooltip:AddLine(" ", 1, 1, 1)
-          GameTooltip:AddLine("Earned: "..date("%m/%d/%Y", this.earnedAt), 0.5, 0.8, 0.5)
-        else
-          GameTooltip:AddLine(" ", 1, 1, 1)
-          GameTooltip:AddLine("Not yet earned", 0.6, 0.6, 0.6)
-        end
-        GameTooltip:Show()
-      end)
-      
-      frame:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-      end)
-      
       -- CALCULATE POSITION
       local xPos = 10 + (col * xSpacing)
       local yPos = yOffset - (row * ySpacing)
+      lastYPos = yPos  -- Update last Y position
 
-      -- Clear any existing points before setting new position
       frame:ClearAllPoints()
       frame:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", xPos, yPos)
 
@@ -3727,6 +3711,26 @@ function LeafVE.UI:RefreshBadges()
       frame.badgeName = badge.name
       frame.badgeDesc = badge.desc
       frame.earnedAt = badge.earnedAt
+      
+      -- TOOLTIP
+      frame:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        GameTooltip:SetText(this.badgeName, THEME.gold[1], THEME.gold[2], THEME.gold[3], 1, true)
+        GameTooltip:AddLine(this.badgeDesc, 1, 1, 1, true)
+        if this.earnedAt then
+          GameTooltip:AddLine(" ", 1, 1, 1)
+          GameTooltip:AddLine("Earned: "..date("%m/%d/%Y", this.earnedAt), 0.5, 0.8, 0.5)
+        else
+          GameTooltip:AddLine(" ", 1, 1, 1)
+          GameTooltip:AddLine("Not yet earned", 0.6, 0.6, 0.6)
+        end
+        GameTooltip:Show()
+      end)
+      
+      frame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+      end)
 
       frame:Show()
 
@@ -3738,28 +3742,45 @@ function LeafVE.UI:RefreshBadges()
       end
     end
 
-        -- Set scroll height based on total rows needed
-    local totalRows = math.ceil(table.getn(allBadges) / perRow)
-    local totalHeight = math.max(800, (totalRows * ySpacing) + 50)  -- ← FORCE MINIMUM HEIGHT
-    scrollChild:SetHeight(totalHeight)
+    -- CALCULATE TOTAL HEIGHT using actual last position
+    local calculatedHeight = math.abs(lastYPos) + badgeSize + 80
+    
+    Print("DEBUG: Setting height to "..calculatedHeight)
+    
+    -- FORCE the scrollChild to update (Vanilla WoW fix)
+    scrollChild:SetHeight(1)  -- Reset to 1
+    scrollChild:Show()
+    scrollChild:SetHeight(calculatedHeight)  -- Set actual height
+    
+    -- Force the scrollFrame to recalculate
+    panel.scrollFrame:SetVerticalScroll(0)
+    panel.scrollFrame:Show()
+    
+    Print("DEBUG: Badges="..table.getn(allBadges).." rows="..row.." lastY="..lastYPos.." calcHeight="..calculatedHeight)
   end
 
-  -- Force update scroll range
-  scrollChild:SetHeight(math.max(1000, math.abs(yOffset) + 50))
-  
-  -- Wait a frame for layout to update
-  local updateFrame = CreateFrame("Frame")
-  updateFrame:SetScript("OnUpdate", function()
+  -- Wait one frame for layout to update, then check scroll range
+  local checkFrame = CreateFrame("Frame")
+  checkFrame:SetScript("OnUpdate", function()
     local scrollRange = panel.scrollFrame:GetVerticalScrollRange()
+    local viewportHeight = panel.scrollFrame:GetHeight()
+    
+    Print("DEBUG: AFTER UPDATE - ScrollRange="..scrollRange.." ViewportHeight="..viewportHeight)
+    
     if scrollRange > 0 then
       panel.scrollBar:SetMinMaxValues(0, scrollRange)
       panel.scrollBar:Show()
+      Print("DEBUG: Scrollbar enabled with range 0 to "..scrollRange)
     else
       panel.scrollBar:Hide()
+      Print("DEBUG: Scrollbar hidden - no scroll needed")
     end
+    
     panel.scrollFrame:SetVerticalScroll(0)
     panel.scrollBar:SetValue(0)
-    updateFrame:SetScript("OnUpdate", nil)
+    
+    -- Remove this frame after one update
+    checkFrame:SetScript("OnUpdate", nil)
   end)
 end
 
@@ -4339,6 +4360,24 @@ seterrorhandler(function(err)
   end
 end)
 
+function LeafVE:CheckWeeklyReset()
+  EnsureDB()
+  
+  if not LeafVE_DB.lastWeekStart then
+    LeafVE_DB.lastWeekStart = WeekStartTS(Now())
+    return
+  end
+  
+  local currentWeekStart = WeekStartTS(Now())
+  
+  -- If it's a new week, clear the weekly cache
+  if currentWeekStart ~= LeafVE_DB.lastWeekStart then
+    Print("New week detected! Resetting weekly leaderboard cache.")
+    LeafVE_DB.weeklyCache = {}
+    LeafVE_DB.lastWeekStart = currentWeekStart
+  end
+end
+
 -------------------------------------------------
 -- EVENT HANDLERS
 -------------------------------------------------
@@ -4376,6 +4415,7 @@ ef:SetScript("OnEvent", function()
     Print("Loaded v"..LeafVE.version)
     Print("Auto-tracking: Login & Group points enabled!")
     LeafVE:CheckDailyLogin()
+    LeafVE:CheckWeeklyReset()
     
     -- Broadcast after 5 seconds
     local broadcastTimer = 0
